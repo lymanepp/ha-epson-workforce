@@ -1,0 +1,29 @@
+{
+  "name": "epson-workforce",
+  "image": "mcr.microsoft.com/vscode/devcontainers/python:3.12-bullseye",
+  "postCreateCommand": "scripts/setup",
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "charliermarsh.ruff",
+        "ms-python.pylint",
+        "ms-python.vscode-pylance",
+        "visualstudioexptteam.vscodeintellicode",
+        "GitHub.vscode-pull-request-github"
+      ],
+      "settings": {
+        "python.experiments.optOutFrom": ["pythonTestAdapter"],
+        "python.pythonPath": "/usr/local/bin/python",
+        "python.testing.pytestArgs": ["--no-cov"],
+        "python.analysis.fixAll": [],
+        "editor.formatOnPaste": false,
+        "editor.formatOnSave": true,
+        "editor.formatOnType": true,
+        "files.trimTrailingWhitespace": true,
+        "[python]": {
+          "editor.defaultFormatter": "charliermarsh.ruff"
+        }
+      }
+    }
+  }
+}

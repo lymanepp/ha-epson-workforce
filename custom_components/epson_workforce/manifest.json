@@ -1,0 +1,10 @@
+{
+  "domain": "epson_workforce",
+  "name": "Epson WorkForce",
+  "codeowners": ["@lymanepp"],
+  "version": "0.0.1",
+  "documentation": "https://web.archive.org/web/20231002135012/https://www.home-assistant.io/integrations/epsonworkforce/",
+  "iot_class": "local_polling",
+  "loggers": [],
+  "requirements": ["beautifulsoup4==4.12.3"]
+}

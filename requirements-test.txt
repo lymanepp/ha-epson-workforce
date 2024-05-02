@@ -1,0 +1,10 @@
+homeassistant-stubs==2024.5.0
+mypy==1.5.1
+pytest==8.1.1
+pytest-aiohttp==1.0.5
+pytest-asyncio==0.23.6
+pytest-cov==5.0.0
+# https://github.com/MatthewFlamm/pytest-homeassistant-custom-component/releases
+pytest-homeassistant-custom-component>=0.13.120
+ruff==0.4.2
+voluptuous-stubs==0.1.1
