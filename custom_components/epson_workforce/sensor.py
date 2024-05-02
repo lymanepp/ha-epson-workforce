@@ -20,37 +20,37 @@ import voluptuous as vol
 from .api import EpsonWorkForceAPI
 
 SENSOR_TYPES: tuple[SensorEntityDescription, ...] = (
-    SensorEntityDescription(
+    SensorEntityDescription(  # type: ignore[call-arg]
         key="black",
         name="Ink level Black",
         icon="mdi:water",
         native_unit_of_measurement=PERCENTAGE,
     ),
-    SensorEntityDescription(
+    SensorEntityDescription(  # type: ignore[call-arg]
         key="photoblack",
         name="Ink level Photoblack",
         icon="mdi:water",
         native_unit_of_measurement=PERCENTAGE,
     ),
-    SensorEntityDescription(
+    SensorEntityDescription(  # type: ignore[call-arg]
         key="magenta",
         name="Ink level Magenta",
         icon="mdi:water",
         native_unit_of_measurement=PERCENTAGE,
     ),
-    SensorEntityDescription(
+    SensorEntityDescription(  # type: ignore[call-arg]
         key="cyan",
         name="Ink level Cyan",
         icon="mdi:water",
         native_unit_of_measurement=PERCENTAGE,
     ),
-    SensorEntityDescription(
+    SensorEntityDescription(  # type: ignore[call-arg]
         key="yellow",
         name="Ink level Yellow",
         icon="mdi:water",
         native_unit_of_measurement=PERCENTAGE,
     ),
-    SensorEntityDescription(
+    SensorEntityDescription(  # type: ignore[call-arg]
         key="clean",
         name="Cleaning level",
         icon="mdi:water",

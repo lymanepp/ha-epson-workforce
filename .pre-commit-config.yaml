@@ -12,3 +12,7 @@ repos:
         files: '^custom_components/'
       - id: ruff-format
         files: '^custom_components/'
+  - repo: https://github.com/pre-commit/mirrors-mypy
+    rev: '08cbc46b6e135adec84911b20e98e5bc52032152'  # v1.5.1
+    hooks:
+    -   id: mypy
