@@ -67,6 +67,7 @@ MONITORED_CONDITIONS: list[str] = [desc.key for desc in SENSOR_TYPES]
 PLATFORM_SCHEMA = PLATFORM_SCHEMA.extend(
     {
         vol.Required(CONF_HOST): cv.string,
+        vol.Optional(CONF_PATH): cv.string,
         vol.Required(CONF_MONITORED_CONDITIONS): vol.All(
             cv.ensure_list, [vol.In(MONITORED_CONDITIONS)]
         ),
