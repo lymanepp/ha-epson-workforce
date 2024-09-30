@@ -9,7 +9,12 @@ from homeassistant.components.sensor import (
     SensorEntity,
     SensorEntityDescription,
 )
-from homeassistant.const import CONF_HOST, CONF_MONITORED_CONDITIONS, PERCENTAGE
+from homeassistant.const import (
+    CONF_HOST,
+    CONF_MONITORED_CONDITIONS,
+    CONF_PATH,
+    PERCENTAGE,
+)
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import PlatformNotReady
 import homeassistant.helpers.config_validation as cv
@@ -78,8 +83,9 @@ def setup_platform(
 ) -> None:
     """Set up the cartridge sensor."""
     host = config.get(CONF_HOST)
+    path = config.get(CONF_PATH, "/PRESENTATION/HTML/TOP/PRTINFO.HTML")
 
-    api = EpsonWorkForceAPI(host)
+    api = EpsonWorkForceAPI(host, path)
     if not api.available:
         raise PlatformNotReady
 

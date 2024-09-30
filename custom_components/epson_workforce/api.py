@@ -15,9 +15,9 @@ SENSOR_TO_DIV = {
 
 
 class EpsonWorkForceAPI:
-    def __init__(self, ip):
+    def __init__(self, ip, path):
         """Initialize the link to the printer status page."""
-        self._resource = "http://" + ip + "/PRESENTATION/HTML/TOP/PRTINFO.HTML"
+        self._resource = "http://" + ip + path
         self.available = True
         self.soup = None
         self.update()

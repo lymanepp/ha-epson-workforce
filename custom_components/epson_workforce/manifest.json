@@ -2,7 +2,7 @@
   "domain": "epson_workforce",
   "name": "Epson WorkForce Printer",
   "codeowners": ["@lymanepp"],
-  "version": "0.0.1",
+  "version": "0.0.2",
   "documentation": "https://github.com/lymanepp/ha-epson-workforce",
   "iot_class": "local_polling",
   "issue_tracker": "https://github.com/lymanepp/ha-epson-workforce/issues",
