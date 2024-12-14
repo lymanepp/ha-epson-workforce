@@ -14,6 +14,8 @@ sensor:
      - yellow
      - magenta
      - cyan
+     - lightmagenta
+     - lightcyan
      - clean
 ```
 
@@ -37,6 +39,10 @@ monitored_conditions:
       description: The magenta (=red) ink cartridge.
     cyan:
       description: The cyan (=blue) ink cartridge.
+    lightmagenta:
+      description: The light magenta (=red) ink cartridge.
+    lightcyan:
+      description: The light cyan (=blue) ink cartridge.
     clean:
       description: The cleaning cartridge.
 {% endconfiguration %}

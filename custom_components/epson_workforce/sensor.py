@@ -56,6 +56,18 @@ SENSOR_TYPES: tuple[SensorEntityDescription, ...] = (
         native_unit_of_measurement=PERCENTAGE,
     ),
     SensorEntityDescription(  # type: ignore[call-arg]
+        key="lightcyan",
+        name="Ink level Light Cyan",
+        icon="mdi:water",
+        native_unit_of_measurement=PERCENTAGE,
+    ),
+    SensorEntityDescription(  # type: ignore[call-arg]
+        key="lightmagenta",
+        name="Ink level Light Magenta",
+        icon="mdi:water",
+        native_unit_of_measurement=PERCENTAGE,
+    ),
+    SensorEntityDescription(  # type: ignore[call-arg]
         key="clean",
         name="Cleaning level",
         icon="mdi:water",

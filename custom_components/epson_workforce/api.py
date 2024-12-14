@@ -10,6 +10,8 @@ SENSOR_TO_DIV = {
     "magenta": ("clrname", "M"),
     "cyan": ("clrname", "C"),
     "yellow": ("clrname", "Y"),
+    "lightcyan": ("clrname", "LC"),
+    "lightmagenta": ("clrname", "LM"),
     "clean": ("mbicn", "Waste"),
 }
 
