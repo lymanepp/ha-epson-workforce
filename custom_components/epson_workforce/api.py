@@ -24,7 +24,7 @@ class EpsonWorkForceAPI:
         self.soup = None
         self.update()
 
-    def getSensorValue(self, sensor):
+    def get_sensor_value(self, sensor):
         """To make it the user easier to configure the cartridge type."""
         if sensor not in SENSOR_TO_DIV:
             return 0
@@ -41,8 +41,8 @@ class EpsonWorkForceAPI:
             return 0
 
     def update(self):
+        """Fetch the HTML page."""
         try:
-            """Just fetch the HTML page."""
             with urllib.request.urlopen(self._resource) as response:
                 data = response.read()
                 response.close()
