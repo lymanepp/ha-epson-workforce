@@ -20,7 +20,6 @@ from homeassistant.exceptions import PlatformNotReady
 import homeassistant.helpers.config_validation as cv
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.typing import ConfigType, DiscoveryInfoType
-from propcache import cached_property
 import voluptuous as vol
 
 from .api import EpsonWorkForceAPI
@@ -127,7 +126,7 @@ class EpsonPrinterCartridge(SensorEntity):
         """Return the state of the device."""
         return self._api.get_sensor_value(self.entity_description.key)
 
-    @cached_property
+    @property
     def available(self) -> bool:
         """Could the device be accessed during the last update call."""
         return self._api.available
