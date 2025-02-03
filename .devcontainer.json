@@ -1,6 +1,6 @@
 {
   "name": "epson-workforce",
-  "image": "mcr.microsoft.com/vscode/devcontainers/python:3.12-bullseye",
+  "image": "mcr.microsoft.com/vscode/devcontainers/python:3.13-bullseye",
   "postCreateCommand": "scripts/setup",
   "customizations": {
     "vscode": {
