@@ -11,7 +11,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        python-version: ["3.12"]
+        python-version: ["3.13"]
 
     steps:
     - name: Checkout the repository
@@ -28,7 +28,7 @@ jobs:
       run: |
         pytest tests
     - name: Upload coverage to Codecov
-      if: ${{ matrix.python-version == '3.12' }}
+      if: ${{ matrix.python-version == '3.13' }}
       run: |
         pytest tests -rxf -x -v -l --cov=./ --cov-report=xml > /dev/null
         coverage report --skip-covered
