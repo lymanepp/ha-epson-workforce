@@ -51,5 +51,5 @@ class EpsonWorkForceAPI:
 
             self.soup = BeautifulSoup(data, "html.parser")
             self.available = True
-        except Exception as ex:
+        except Exception:
             self.available = False
