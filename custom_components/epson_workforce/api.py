@@ -1,5 +1,6 @@
 """Epson WorkForce API"""
 
+import ssl
 import urllib.request
 
 from bs4 import BeautifulSoup
@@ -43,11 +44,12 @@ class EpsonWorkForceAPI:
     def update(self):
         """Fetch the HTML page."""
         try:
-            with urllib.request.urlopen(self._resource) as response:
+            context = ssl._create_unverified_context()
+            with urllib.request.urlopen(self._resource, context=context) as response:
                 data = response.read()
                 response.close()
 
             self.soup = BeautifulSoup(data, "html.parser")
             self.available = True
-        except Exception:
+        except Exception as ex:
             self.available = False
