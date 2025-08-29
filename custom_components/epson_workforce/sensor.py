@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from datetime import timedelta
 
 from homeassistant.components.sensor import (
@@ -21,6 +22,8 @@ from homeassistant.helpers.update_coordinator import (
 
 from . import DOMAIN
 from .api import EpsonWorkForceAPI
+
+_LOGGER = logging.getLogger(__name__)
 
 SENSOR_TYPES: tuple[SensorEntityDescription, ...] = (
     SensorEntityDescription(  # type: ignore[call-arg]
@@ -78,7 +81,7 @@ SENSOR_TYPES: tuple[SensorEntityDescription, ...] = (
     ),
 )
 
-SCAN_INTERVAL = timedelta(minutes=60)
+SCAN_INTERVAL = timedelta(seconds=60)
 
 
 async def async_setup_entry(
@@ -95,13 +98,44 @@ async def async_setup_entry(
     # Fetch initial data so we have data when entities are added
     await coordinator.async_config_entry_first_refresh()
 
-    # Create all sensor entities
+    # Detect which sensors are actually available on this printer
+    available_sensors = await hass.async_add_executor_job(_detect_available_sensors, api)
+
+    _LOGGER.info(
+        "Detected %d available sensors for printer %s: %s",
+        len(available_sensors),
+        entry.data["host"],
+        ", ".join(available_sensors)
+    )
+
+    # Create only sensors that are available on this printer
     sensors = [
         EpsonPrinterCartridge(coordinator, description, entry.data["host"])
         for description in SENSOR_TYPES
+        if description.key in available_sensors
     ]
 
+    _LOGGER.info("Created %d sensor entities for printer %s", len(sensors), entry.data["host"])
     async_add_entities(sensors, True)
+
+
+def _detect_available_sensors(api: EpsonWorkForceAPI) -> list[str]:
+    """Detect which sensors are available on this specific printer."""
+    available_sensors = []
+
+    for description in SENSOR_TYPES:
+        sensor_key = description.key
+        value = api.get_sensor_value(sensor_key)
+
+        # Consider a sensor available if:
+        # - It returns a non-None value
+        # - For numeric sensors: value > 0 or value == 0 (some tanks might be empty)
+        # - For string sensors (like printer_status): any string value
+        if value is not None:
+            if isinstance(value, str) or isinstance(value, (int, float)):
+                available_sensors.append(sensor_key)
+
+    return available_sensors
 
 
 class EpsonWorkForceDataUpdateCoordinator(DataUpdateCoordinator):
