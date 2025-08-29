@@ -108,7 +108,7 @@ def setup_platform(
         raise PlatformNotReady
 
     sensors = [
-        EpsonPrinterCartridge(api, description)
+        EpsonPrinterCartridge(api, description, host)
         for description in SENSOR_TYPES
         if description.key in config[CONF_MONITORED_CONDITIONS]
     ]
@@ -120,11 +120,19 @@ class EpsonPrinterCartridge(SensorEntity):
     """Representation of a cartridge sensor."""
 
     def __init__(
-        self, api: EpsonWorkForceAPI, description: SensorEntityDescription
+        self, api: EpsonWorkForceAPI, description: SensorEntityDescription, host: str
     ) -> None:
         """Initialize a cartridge sensor."""
         self._api = api
         self.entity_description = description
+        self._host = host
+
+    @property
+    def unique_id(self) -> str:
+        """Return a unique ID for this sensor."""
+        # Create unique ID using host and sensor key
+        host_clean = self._host.replace(".", "_").replace(":", "_")
+        return f"epson_workforce_{host_clean}_{self.entity_description.key}"
 
     @property
     def native_value(self):
