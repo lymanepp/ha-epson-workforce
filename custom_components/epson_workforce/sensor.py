@@ -5,24 +5,21 @@ from __future__ import annotations
 from datetime import timedelta
 
 from homeassistant.components.sensor import (
-    PLATFORM_SCHEMA,
     SensorEntity,
     SensorEntityDescription,
 )
-from homeassistant.const import (
-    CONF_HOST,
-    CONF_MONITORED_CONDITIONS,
-    CONF_PATH,
-    PERCENTAGE,
-)
+from homeassistant.config_entries import ConfigEntry
+from homeassistant.const import PERCENTAGE
 from homeassistant.core import HomeAssistant
-from homeassistant.exceptions import PlatformNotReady
 from homeassistant.helpers.device_registry import DeviceInfo
-import homeassistant.helpers.config_validation as cv
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
-from homeassistant.helpers.typing import ConfigType, DiscoveryInfoType
-import voluptuous as vol
+from homeassistant.helpers.update_coordinator import (
+    CoordinatorEntity,
+    DataUpdateCoordinator,
+    UpdateFailed,
+)
 
+from . import DOMAIN
 from .api import EpsonWorkForceAPI
 
 SENSOR_TYPES: tuple[SensorEntityDescription, ...] = (
@@ -80,51 +77,65 @@ SENSOR_TYPES: tuple[SensorEntityDescription, ...] = (
         icon="mdi:printer",
     ),
 )
-MONITORED_CONDITIONS: list[str] = [desc.key for desc in SENSOR_TYPES]
 
-PLATFORM_SCHEMA = PLATFORM_SCHEMA.extend(
-    {
-        vol.Required(CONF_HOST): cv.string,
-        vol.Optional(CONF_PATH): cv.string,
-        vol.Required(CONF_MONITORED_CONDITIONS): vol.All(
-            cv.ensure_list, [vol.In(MONITORED_CONDITIONS)]
-        ),
-    }
-)
 SCAN_INTERVAL = timedelta(minutes=60)
 
 
-def setup_platform(
+async def async_setup_entry(
     hass: HomeAssistant,
-    config: ConfigType,
-    add_devices: AddEntitiesCallback,
-    discovery_info: DiscoveryInfoType | None = None,
+    entry: ConfigEntry,
+    async_add_entities: AddEntitiesCallback,
 ) -> None:
-    """Set up the cartridge sensor."""
-    host = config.get(CONF_HOST)
-    path = config.get(CONF_PATH, "/PRESENTATION/HTML/TOP/PRTINFO.HTML")
+    """Set up Epson WorkForce sensors from a config entry."""
+    api = hass.data[DOMAIN][entry.entry_id]
 
-    api = EpsonWorkForceAPI(host, path)
-    if not api.available:
-        raise PlatformNotReady
+    # Create update coordinator
+    coordinator = EpsonWorkForceDataUpdateCoordinator(hass, api)
 
+    # Fetch initial data so we have data when entities are added
+    await coordinator.async_config_entry_first_refresh()
+
+    # Create all sensor entities
     sensors = [
-        EpsonPrinterCartridge(api, description, host)
+        EpsonPrinterCartridge(coordinator, description, entry.data["host"])
         for description in SENSOR_TYPES
-        if description.key in config[CONF_MONITORED_CONDITIONS]
     ]
 
-    add_devices(sensors, True)
+    async_add_entities(sensors, True)
 
 
-class EpsonPrinterCartridge(SensorEntity):
+class EpsonWorkForceDataUpdateCoordinator(DataUpdateCoordinator):
+    """Class to manage fetching data from the API."""
+
+    def __init__(self, hass: HomeAssistant, api: EpsonWorkForceAPI) -> None:
+        """Initialize."""
+        self.api = api
+        super().__init__(
+            hass,
+            logger=__import__("logging").getLogger(__name__),
+            name=DOMAIN,
+            update_interval=SCAN_INTERVAL,
+        )
+
+    async def _async_update_data(self):
+        """Update data via library."""
+        try:
+            await self.hass.async_add_executor_job(self.api.update)
+            if not self.api.available:
+                raise UpdateFailed("Printer is not available")
+            return True
+        except Exception as exception:
+            raise UpdateFailed(exception) from exception
+
+
+class EpsonPrinterCartridge(CoordinatorEntity, SensorEntity):
     """Representation of a cartridge sensor."""
 
     def __init__(
-        self, api: EpsonWorkForceAPI, description: SensorEntityDescription, host: str
+        self, coordinator: EpsonWorkForceDataUpdateCoordinator, description: SensorEntityDescription, host: str
     ) -> None:
         """Initialize a cartridge sensor."""
-        self._api = api
+        super().__init__(coordinator)
         self.entity_description = description
         self._host = host
         self._host_clean = host.replace(".", "_").replace(":", "_")
@@ -133,15 +144,15 @@ class EpsonPrinterCartridge(SensorEntity):
     def device_info(self) -> DeviceInfo:
         """Return device information for this printer."""
         device_info = DeviceInfo(
-            identifiers={("epson_workforce", self._host)},
+            identifiers={(DOMAIN, self._host)},
             name=f"Epson WorkForce Printer ({self._host})",
             manufacturer="Epson",
-            model=self._api.model,
+            model=self.coordinator.api.model,
         )
 
-        # Add serial number if available
-        if self._api.serial_number:
-            device_info["serial_number"] = self._api.serial_number
+        # Add MAC address as a connection identifier
+        if self.coordinator.api.mac_address:
+            device_info["connections"] = {("mac", self.coordinator.api.mac_address)}
 
         return device_info
 
@@ -153,13 +164,9 @@ class EpsonPrinterCartridge(SensorEntity):
     @property
     def native_value(self):
         """Return the state of the device."""
-        return self._api.get_sensor_value(self.entity_description.key)
+        return self.coordinator.api.get_sensor_value(self.entity_description.key)
 
     @property
     def available(self) -> bool:
         """Could the device be accessed during the last update call."""
-        return self._api.available
-
-    def update(self) -> None:
-        """Get the latest data from the Epson printer."""
-        self._api.update()
+        return self.coordinator.last_update_success and self.coordinator.api.available

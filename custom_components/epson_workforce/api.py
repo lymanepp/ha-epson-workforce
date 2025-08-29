@@ -25,7 +25,7 @@ class EpsonWorkForceAPI:
         self.available = True
         self.soup = None
         self._model = None
-        self._serial = None
+        self._mac_address = None
         self.update()
 
     def get_sensor_value(self, sensor):
@@ -62,10 +62,11 @@ class EpsonWorkForceAPI:
         """Return the printer model if available."""
         return self._model or "WorkForce Printer"
 
+
     @property
-    def serial_number(self):
-        """Return the printer serial number if available."""
-        return self._serial
+    def mac_address(self):
+        """Return the printer MAC address if available."""
+        return self._mac_address
 
     def _extract_device_info(self):
         """Extract device information from the HTML page."""
@@ -84,7 +85,6 @@ class EpsonWorkForceAPI:
         except Exception:
             pass
 
-        # Try to find serial number or MAC address
         try:
             # Look for MAC address in the text content
             all_text = self.soup.get_text()
@@ -92,11 +92,11 @@ class EpsonWorkForceAPI:
 
             for line in lines:
                 if 'MAC Address' in line and ':' in line:
-                    # Extract MAC address as serial identifier
+                    # Extract MAC address
                     mac_part = line.split('MAC Address')[1].strip()
                     if mac_part.startswith(':'):
                         mac_part = mac_part[1:].strip()
-                    self._serial = mac_part
+                    self._mac_address = mac_part
                     break
         except Exception:
             pass
