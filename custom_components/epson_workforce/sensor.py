@@ -73,6 +73,11 @@ SENSOR_TYPES: tuple[SensorEntityDescription, ...] = (
         icon="mdi:water",
         native_unit_of_measurement=PERCENTAGE,
     ),
+    SensorEntityDescription(  # type: ignore[call-arg]
+        key="printer_status",
+        name="Printer Status",
+        icon="mdi:printer",
+    ),
 )
 MONITORED_CONDITIONS: list[str] = [desc.key for desc in SENSOR_TYPES]
 

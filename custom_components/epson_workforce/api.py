@@ -14,6 +14,7 @@ SENSOR_TO_DIV = {
     "lightcyan": ("clrname", "LC"),
     "lightmagenta": ("clrname", "LM"),
     "clean": ("mbicn", "Waste"),
+    "printer_status": ("fieldset", "PRT_STATUS"),
 }
 
 
@@ -32,6 +33,19 @@ class EpsonWorkForceAPI:
 
         div_name, div_text = SENSOR_TO_DIV.get(sensor)
 
+        # Handle printer status sensor differently
+        if sensor == "printer_status":
+            try:
+                fieldset = self.soup.find("fieldset", id=div_text)
+                if fieldset:
+                    ul = fieldset.find("ul")
+                    if ul:
+                        return ul.get_text(strip=True)
+                return "Unknown"
+            except Exception:
+                return "Unknown"
+
+        # Handle ink level sensors
         try:
             for li in self.soup.find_all("li", class_="tank"):
                 div = li.find("div", class_=div_name)
