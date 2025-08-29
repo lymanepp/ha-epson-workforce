@@ -152,7 +152,7 @@ class EpsonPrinterCartridge(CoordinatorEntity, SensorEntity):
 
         # Add MAC address as a connection identifier
         if self.coordinator.api.mac_address:
-            device_info["connections"] = {("mac", self.coordinator.api.mac_address)}
+            device_info["connections"] = {("mac", self.coordinator.api.mac_address.lower())}
 
         return device_info
 
