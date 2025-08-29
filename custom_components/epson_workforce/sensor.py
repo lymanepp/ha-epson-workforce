@@ -71,7 +71,7 @@ SENSOR_TYPES: tuple[SensorEntityDescription, ...] = (
     SensorEntityDescription(  # type: ignore[call-arg]
         key="clean",
         name="Cleaning level",
-        icon="mdi:water",
+        icon="mdi:broom",
         native_unit_of_measurement=PERCENTAGE,
     ),
     SensorEntityDescription(  # type: ignore[call-arg]
