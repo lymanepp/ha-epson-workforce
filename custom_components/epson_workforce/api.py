@@ -42,7 +42,11 @@ class EpsonWorkForceAPI:
                 if fieldset:
                     ul = fieldset.find("ul")
                     if ul:
-                        return ul.get_text(strip=True)
+                        status = ul.get_text(strip=True)
+                        # Strip trailing period only if status is less than 30 characters
+                        if status and len(status) < 30 and status.endswith('.'):
+                            status = status[:-1]
+                        return status
                 return "Unknown"
             except Exception:
                 return "Unknown"
