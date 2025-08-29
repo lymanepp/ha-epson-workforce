@@ -24,6 +24,8 @@ class EpsonWorkForceAPI:
         self._resource = "http://" + ip + path
         self.available = True
         self.soup = None
+        self._model = None
+        self._serial = None
         self.update()
 
     def get_sensor_value(self, sensor):
@@ -55,6 +57,50 @@ class EpsonWorkForceAPI:
         except Exception:
             return 0
 
+    @property
+    def model(self):
+        """Return the printer model if available."""
+        return self._model or "WorkForce Printer"
+
+    @property
+    def serial_number(self):
+        """Return the printer serial number if available."""
+        return self._serial
+
+    def _extract_device_info(self):
+        """Extract device information from the HTML page."""
+        if not self.soup:
+            return
+
+        # Try to find model information
+        try:
+            # Look for model in title or other common locations
+            title = self.soup.find("title")
+            if title and title.text:
+                title_text = title.text.strip()
+                # Extract model from title (e.g., "ET-8500 Series")
+                if title_text and title_text != "":
+                    self._model = f"Epson {title_text}"
+        except Exception:
+            pass
+
+        # Try to find serial number or MAC address
+        try:
+            # Look for MAC address in the text content
+            all_text = self.soup.get_text()
+            lines = [line.strip() for line in all_text.split('\n') if line.strip()]
+
+            for line in lines:
+                if 'MAC Address' in line and ':' in line:
+                    # Extract MAC address as serial identifier
+                    mac_part = line.split('MAC Address')[1].strip()
+                    if mac_part.startswith(':'):
+                        mac_part = mac_part[1:].strip()
+                    self._serial = mac_part
+                    break
+        except Exception:
+            pass
+
     def update(self):
         """Fetch the HTML page."""
         try:
@@ -65,5 +111,6 @@ class EpsonWorkForceAPI:
 
             self.soup = BeautifulSoup(data, "html.parser")
             self.available = True
+            self._extract_device_info()
         except Exception:
             self.available = False

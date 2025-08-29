@@ -17,6 +17,7 @@ from homeassistant.const import (
 )
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import PlatformNotReady
+from homeassistant.helpers.device_registry import DeviceInfo
 import homeassistant.helpers.config_validation as cv
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.typing import ConfigType, DiscoveryInfoType
@@ -126,13 +127,28 @@ class EpsonPrinterCartridge(SensorEntity):
         self._api = api
         self.entity_description = description
         self._host = host
+        self._host_clean = host.replace(".", "_").replace(":", "_")
+
+    @property
+    def device_info(self) -> DeviceInfo:
+        """Return device information for this printer."""
+        device_info = DeviceInfo(
+            identifiers={("epson_workforce", self._host)},
+            name=f"Epson WorkForce Printer ({self._host})",
+            manufacturer="Epson",
+            model=self._api.model,
+        )
+
+        # Add serial number if available
+        if self._api.serial_number:
+            device_info["serial_number"] = self._api.serial_number
+
+        return device_info
 
     @property
     def unique_id(self) -> str:
         """Return a unique ID for this sensor."""
-        # Create unique ID using host and sensor key
-        host_clean = self._host.replace(".", "_").replace(":", "_")
-        return f"epson_workforce_{host_clean}_{self.entity_description.key}"
+        return f"epson_workforce_{self._host_clean}_{self.entity_description.key}"
 
     @property
     def native_value(self):
