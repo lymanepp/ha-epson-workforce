@@ -403,7 +403,7 @@ class TestEpsonWorkForceAPI:
         # Test printer status with None soup
         self.api.soup = None
         status = self.api.get_sensor_value("printer_status")
-        assert status == "Unknown"
+        assert status is None
 
         # Test ink level with None soup
         ink_level = self.api.get_sensor_value("black")
