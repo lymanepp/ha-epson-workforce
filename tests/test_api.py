@@ -312,11 +312,11 @@ class TestEpsonWorkForceAPI:
 
         # Test unknown sensor type
         result = self.api.get_sensor_value("unknown_sensor")
-        assert result == 0
+        assert result is None
 
         # Test None sensor type
         result = self.api.get_sensor_value(None)
-        assert result == 0
+        assert result is None
 
     def test_malformed_ink_structure(self):
         """Test handling of malformed ink level HTML."""
@@ -337,7 +337,7 @@ class TestEpsonWorkForceAPI:
         """
         self.api.soup = BeautifulSoup(html, "html.parser")
         black_level = self.api.get_sensor_value("black")
-        assert black_level == 0
+        assert black_level is None
 
         # Test case 2: Missing tank div
         html = """
@@ -353,7 +353,7 @@ class TestEpsonWorkForceAPI:
         """
         self.api.soup = BeautifulSoup(html, "html.parser")
         black_level = self.api.get_sensor_value("black")
-        assert black_level == 0
+        assert black_level is None
 
     def test_device_info_extraction(self):
         """Test device information extraction."""
@@ -407,7 +407,7 @@ class TestEpsonWorkForceAPI:
 
         # Test ink level with None soup
         ink_level = self.api.get_sensor_value("black")
-        assert ink_level == 0
+        assert ink_level is None
 
         # Test device info extraction with None soup
         self.api.soup = None

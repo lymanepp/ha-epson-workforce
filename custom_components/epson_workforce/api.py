@@ -38,7 +38,7 @@ class EpsonWorkForceAPI:
 
         # Handle ink level sensors
         if sensor not in LEVEL_SENSOR_TO_DIV:
-            return 0
+            return None
 
         div_name, div_text = LEVEL_SENSOR_TO_DIV.get(sensor)
         try:
@@ -50,7 +50,7 @@ class EpsonWorkForceAPI:
         except Exception:
             pass
 
-        return 0
+        return None
 
     @property
     def model(self):
