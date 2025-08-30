@@ -85,6 +85,9 @@ class TestEpsonWorkForceAPIFixtures:
         assert self.api.get_sensor_value("magenta") == 72
         assert self.api.get_sensor_value("yellow") == 40
         assert self.api.get_sensor_value("cyan") == 100
+        assert self.api.get_sensor_value("photoblack") is None
+        assert self.api.get_sensor_value("lightcyan") is None
+        assert self.api.get_sensor_value("lightmagenta") is None
 
         # Test waste tank level - WF-3540 waste: height='21' * 2 = 42
         assert self.api.get_sensor_value("clean") == 42
