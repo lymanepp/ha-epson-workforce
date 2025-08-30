@@ -5,6 +5,9 @@ import urllib.request
 
 from bs4 import BeautifulSoup
 
+# Maximum status length before truncating trailing period
+MAX_STATUS_LENGTH = 30
+
 SENSOR_TO_DIV = {
     "black": ("clrname", "BK"),
     "photoblack": ("clrname", "PB"),
@@ -43,11 +46,15 @@ class EpsonWorkForceAPI:
                     ul = fieldset.find("ul")
                     if ul:
                         status = ul.get_text(strip=True)
-                        # Strip trailing period only if status is less than 30 characters
-                        if status and len(status) < 30 and status.endswith('.'):
+                        # Strip trailing period only if status is short
+                        if (
+                            status
+                            and len(status) < MAX_STATUS_LENGTH
+                            and status.endswith(".")
+                        ):
                             status = status[:-1]
                         return status
-                return "Unknown"
+                    return "Unknown"
             except Exception:
                 return "Unknown"
 

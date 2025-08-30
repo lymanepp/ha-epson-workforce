@@ -2,13 +2,10 @@
 
 from __future__ import annotations
 
-import logging
 from datetime import timedelta
+import logging
 
-from homeassistant.components.sensor import (
-    SensorEntity,
-    SensorEntityDescription,
-)
+from homeassistant.components.sensor import SensorEntity, SensorEntityDescription
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import PERCENTAGE
 from homeassistant.core import HomeAssistant
@@ -99,7 +96,9 @@ async def async_setup_entry(
     await coordinator.async_config_entry_first_refresh()
 
     # Detect which sensors are actually available on this printer
-    available_sensors = await hass.async_add_executor_job(_detect_available_sensors, api)
+    available_sensors = await hass.async_add_executor_job(
+        _detect_available_sensors, api
+    )
 
     _LOGGER.info(
         "Detected %d available sensors for printer %s: %s",
@@ -115,7 +114,11 @@ async def async_setup_entry(
         if description.key in available_sensors
     ]
 
-    _LOGGER.info("Created %d sensor entities for printer %s", len(sensors), entry.data["host"])
+    _LOGGER.info(
+        "Created %d sensor entities for printer %s",
+        len(sensors),
+        entry.data["host"],
+    )
     async_add_entities(sensors, True)
 
 
@@ -131,11 +134,16 @@ def _detect_available_sensors(api: EpsonWorkForceAPI) -> list[str]:
         # - It returns a non-None value
         # - For numeric sensors: value > 0 or value == 0 (some tanks might be empty)
         # - For string sensors (like printer_status): any string value
-        if value is not None:
-            if isinstance(value, str) or isinstance(value, (int, float)):
-                available_sensors.append(sensor_key)
+        if value is not None and isinstance(value, str | int | float):
+            available_sensors.append(sensor_key)
 
     return available_sensors
+
+
+def _raise_printer_unavailable() -> None:
+    """Raise UpdateFailed for printer unavailable."""
+    msg = "Printer is not available"
+    raise UpdateFailed(msg)
 
 
 class EpsonWorkForceDataUpdateCoordinator(DataUpdateCoordinator):
@@ -156,17 +164,21 @@ class EpsonWorkForceDataUpdateCoordinator(DataUpdateCoordinator):
         try:
             await self.hass.async_add_executor_job(self.api.update)
             if not self.api.available:
-                raise UpdateFailed("Printer is not available")
-            return True
+                _raise_printer_unavailable()
         except Exception as exception:
             raise UpdateFailed(exception) from exception
+        else:
+            return True
 
 
 class EpsonPrinterCartridge(CoordinatorEntity, SensorEntity):
     """Representation of a cartridge sensor."""
 
     def __init__(
-        self, coordinator: EpsonWorkForceDataUpdateCoordinator, description: SensorEntityDescription, host: str
+        self,
+        coordinator: EpsonWorkForceDataUpdateCoordinator,
+        description: SensorEntityDescription,
+        host: str,
     ) -> None:
         """Initialize a cartridge sensor."""
         super().__init__(coordinator)
@@ -175,7 +187,7 @@ class EpsonPrinterCartridge(CoordinatorEntity, SensorEntity):
         self._host_clean = host.replace(".", "_").replace(":", "_")
 
     @property
-    def device_info(self) -> DeviceInfo:
+    def device_info(self) -> DeviceInfo | None:
         """Return device information for this printer."""
         device_info = DeviceInfo(
             identifiers={(DOMAIN, self._host)},
@@ -186,12 +198,14 @@ class EpsonPrinterCartridge(CoordinatorEntity, SensorEntity):
 
         # Add MAC address as a connection identifier
         if self.coordinator.api.mac_address:
-            device_info["connections"] = {("mac", self.coordinator.api.mac_address.lower())}
+            device_info["connections"] = {
+                ("mac", self.coordinator.api.mac_address.lower())
+            }
 
         return device_info
 
     @property
-    def unique_id(self) -> str:
+    def unique_id(self) -> str | None:
         """Return a unique ID for this sensor."""
         return f"epson_workforce_{self._host_clean}_{self.entity_description.key}"
 

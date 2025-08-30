@@ -15,9 +15,10 @@ PLATFORMS: list[Platform] = [Platform.SENSOR]
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up Epson WorkForce from a config entry."""
     # Store the API instance in hass.data for the sensor platform to use
-    api = await hass.async_add_executor_job(
-        EpsonWorkForceAPI, entry.data["host"], entry.data["path"]
-    )
+    def create_api(_: None = None) -> EpsonWorkForceAPI:
+        return EpsonWorkForceAPI(entry.data["host"], entry.data["path"])
+
+    api = await hass.async_add_executor_job(create_api)
 
     hass.data.setdefault(DOMAIN, {})
     hass.data[DOMAIN][entry.entry_id] = api
