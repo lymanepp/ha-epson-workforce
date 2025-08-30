@@ -187,7 +187,7 @@ class EpsonPrinterCartridge(CoordinatorEntity, SensorEntity):
         self._host_clean = host.replace(".", "_").replace(":", "_")
 
     @property
-    def device_info(self) -> DeviceInfo | None:
+    def device_info(self) -> DeviceInfo | None:  # type: ignore[override]
         """Return device information for this printer."""
         device_info = DeviceInfo(
             identifiers={(DOMAIN, self._host)},
@@ -205,7 +205,7 @@ class EpsonPrinterCartridge(CoordinatorEntity, SensorEntity):
         return device_info
 
     @property
-    def unique_id(self) -> str | None:
+    def unique_id(self) -> str | None:  # type: ignore[override]
         """Return a unique ID for this sensor."""
         return f"epson_workforce_{self._host_clean}_{self.entity_description.key}"
 
@@ -215,6 +215,6 @@ class EpsonPrinterCartridge(CoordinatorEntity, SensorEntity):
         return self.coordinator.api.get_sensor_value(self.entity_description.key)
 
     @property
-    def available(self) -> bool:
+    def available(self) -> bool:  # type: ignore[override]
         """Could the device be accessed during the last update call."""
         return self.coordinator.last_update_success and self.coordinator.api.available
