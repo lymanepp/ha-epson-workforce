@@ -32,16 +32,15 @@ class EpsonWorkForceAPI:
 
     def get_sensor_value(self, sensor: str) -> int | str | None:
         """To make it the user easier to configure the cartridge type."""
-        if not self.soup:
-            return None
-
         # Handle printer status sensor separately
         if sensor == "printer_status":
             return self._get_printer_status()
 
         # Handle ink level sensors
-        sensor_info = LEVEL_SENSOR_TO_DIV.get(sensor)
-        if not sensor_info:
+        if not (sensor_info := LEVEL_SENSOR_TO_DIV.get(sensor)):
+            return None
+
+        if not self.soup:
             return None
 
         div_name, div_text = sensor_info
