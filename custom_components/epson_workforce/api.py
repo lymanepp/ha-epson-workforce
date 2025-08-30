@@ -8,7 +8,7 @@ from bs4 import BeautifulSoup
 # Maximum status length before truncating trailing period
 MAX_STATUS_LENGTH = 30
 
-SENSOR_TO_DIV = {
+LEVEL_SENSOR_TO_DIV = {
     "black": ("clrname", "BK"),
     "photoblack": ("clrname", "PB"),
     "magenta": ("clrname", "M"),
@@ -17,7 +17,6 @@ SENSOR_TO_DIV = {
     "lightcyan": ("clrname", "LC"),
     "lightmagenta": ("clrname", "LM"),
     "clean": ("mbicn", "Waste"),
-    "printer_status": ("fieldset", "PRT_STATUS"),
 }
 
 
@@ -33,32 +32,15 @@ class EpsonWorkForceAPI:
 
     def get_sensor_value(self, sensor):
         """To make it the user easier to configure the cartridge type."""
-        if sensor not in SENSOR_TO_DIV:
-            return 0
-
-        div_name, div_text = SENSOR_TO_DIV.get(sensor)
-
-        # Handle printer status sensor differently
+        # Handle printer status sensor separately
         if sensor == "printer_status":
-            try:
-                fieldset = self.soup.find("fieldset", id=div_text)
-                if fieldset:
-                    ul = fieldset.find("ul")
-                    if ul:
-                        status = ul.get_text(strip=True)
-                        # Strip trailing period only if status is short
-                        if (
-                            status
-                            and len(status) < MAX_STATUS_LENGTH
-                            and status.endswith(".")
-                        ):
-                            status = status[:-1]
-                        return status
-                    return "Unknown"
-            except Exception:
-                return "Unknown"
+            return self._get_printer_status()
 
         # Handle ink level sensors
+        if sensor not in LEVEL_SENSOR_TO_DIV:
+            return 0
+
+        div_name, div_text = LEVEL_SENSOR_TO_DIV.get(sensor)
         try:
             for li in self.soup.find_all("li", class_="tank"):
                 div = li.find("div", class_=div_name)
@@ -66,13 +48,14 @@ class EpsonWorkForceAPI:
                 if div and div_text in (div.contents[0], "Waste"):
                     return int(li.find("div", class_="tank").findChild()["height"]) * 2
         except Exception:
-            return 0
+            pass
+
+        return 0
 
     @property
     def model(self):
         """Return the printer model if available."""
         return self._model or "WorkForce Printer"
-
 
     @property
     def mac_address(self):
@@ -111,6 +94,63 @@ class EpsonWorkForceAPI:
                     break
         except Exception:
             pass
+
+    def _clean_status(self, status):
+        """Clean up status text by removing trailing periods from short statuses."""
+        if not status:
+            return None
+        if len(status) < MAX_STATUS_LENGTH and status.endswith('.'):
+            status = status[:-1]
+        return status
+
+    def _get_fieldset_status(self):
+        """Get status from fieldset structure: <fieldset id="PRT_STATUS">
+        <ul>...</ul></fieldset>"""
+        fieldset = self.soup.find("fieldset", id="PRT_STATUS")
+        if not fieldset:
+            return None
+
+        ul = fieldset.find("ul")
+        if not ul:
+            return None
+
+        status = ul.get_text(strip=True)
+        return self._clean_status(status)
+
+    def _get_information_div_status(self):
+        """Get status from information div structure: <div class="information">
+        <p class="clearfix"><span>Available.</span></p></div>"""
+        info_div = self.soup.find("div", class_="information")
+        if not info_div:
+            return None
+
+        # Prefer a <span> inside <p.clearfix>, else any <span> within .information
+        p = info_div.find("p", class_="clearfix")
+        span = (p.find("span") if p else None) or info_div.find("span")
+        if not span:
+            return None
+
+        status = span.get_text(strip=True)
+        return self._clean_status(status)
+
+    def _get_printer_status(self):
+        """Get printer status using multiple parsing strategies."""
+        try:
+            # Try fieldset structure first: <fieldset id="PRT_STATUS">
+            # <ul>...</ul></fieldset>
+            status = self._get_fieldset_status()
+            if status:
+                return status
+
+            # Information div structure: <div class="information"><p class="clearfix">
+            # <span>Available.</span></p></div>
+            status = self._get_information_div_status()
+            if status:
+                return status
+        except Exception:
+            return "Unknown"
+        else:
+            return "Unknown"
 
     def update(self):
         """Fetch the HTML page."""
