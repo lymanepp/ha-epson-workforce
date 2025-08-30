@@ -124,7 +124,7 @@ async def async_setup_entry(
 
 def _detect_available_sensors(api: EpsonWorkForceAPI) -> list[str]:
     """Detect which sensors are available on this specific printer."""
-    available_sensors = []
+    available_sensors: list[str] = []
 
     for description in SENSOR_TYPES:
         sensor_key = description.key
@@ -209,7 +209,6 @@ class EpsonPrinterCartridge(CoordinatorEntity, SensorEntity):
         """Return a unique ID for this sensor."""
         return f"epson_workforce_{self._host_clean}_{self.entity_description.key}"
 
-    @property
     def native_value(self):
         """Return the state of the device."""
         return self.coordinator.api.get_sensor_value(self.entity_description.key)

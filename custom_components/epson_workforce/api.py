@@ -21,7 +21,7 @@ LEVEL_SENSOR_TO_DIV = {
 
 
 class EpsonWorkForceAPI:
-    def __init__(self, ip, path):
+    def __init__(self, ip: str, path: str):
         """Initialize the link to the printer status page."""
         self._resource = "http://" + ip + path
         self.available = True
@@ -30,17 +30,21 @@ class EpsonWorkForceAPI:
         self._mac_address = None
         self.update()
 
-    def get_sensor_value(self, sensor):
+    def get_sensor_value(self, sensor: str) -> int | str | None:
         """To make it the user easier to configure the cartridge type."""
+        if not self.soup:
+            return None
+
         # Handle printer status sensor separately
         if sensor == "printer_status":
             return self._get_printer_status()
 
         # Handle ink level sensors
-        if sensor not in LEVEL_SENSOR_TO_DIV:
+        sensor_info = LEVEL_SENSOR_TO_DIV.get(sensor)
+        if not sensor_info:
             return None
 
-        div_name, div_text = LEVEL_SENSOR_TO_DIV.get(sensor)
+        div_name, div_text = sensor_info
         try:
             for li in self.soup.find_all("li", class_="tank"):
                 div = li.find("div", class_=div_name)
@@ -95,7 +99,7 @@ class EpsonWorkForceAPI:
         except Exception:
             pass
 
-    def _clean_status(self, status):
+    def _clean_status(self, status: str | None) -> str | None:
         """Clean up status text by removing trailing periods from short statuses."""
         if not status:
             return None
@@ -103,9 +107,12 @@ class EpsonWorkForceAPI:
             status = status[:-1]
         return status
 
-    def _get_fieldset_status(self):
+    def _get_fieldset_status(self) -> str | None:
         """Get status from fieldset structure: <fieldset id="PRT_STATUS">
         <ul>...</ul></fieldset>"""
+        if not self.soup:
+            return None
+
         fieldset = self.soup.find("fieldset", id="PRT_STATUS")
         if not fieldset:
             return None
@@ -133,7 +140,7 @@ class EpsonWorkForceAPI:
         status = span.get_text(strip=True)
         return self._clean_status(status)
 
-    def _get_printer_status(self):
+    def _get_printer_status(self) -> str:
         """Get printer status using multiple parsing strategies."""
         try:
             # Try fieldset structure first: <fieldset id="PRT_STATUS">
