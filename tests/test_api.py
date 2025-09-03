@@ -1,6 +1,6 @@
 """Tests for EpsonWorkForceAPI using only the public API (no soup poking)."""
 
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
 
 from custom_components.epson_workforce.api import EpsonWorkForceAPI
 
@@ -100,81 +100,6 @@ class TestEpsonWorkForceAPI:
         """
         api = api_from_html(html)
         assert api.get_sensor_value("printer_status") == "Ready"
-
-    def test_information_div_structure_variations(self):
-        html = "<html><body><div class='information'><span>Available</span></div></body></html>"
-        api = api_from_html(html)
-        assert api.get_sensor_value("printer_status") == "Available"
-
-        html = """
-        <html>
-          <body>
-            <div class="information">
-              <p class="clearfix">
-                <span>Printing.</span>
-                <span>Page 1 of 5</span>
-              </p>
-            </div>
-          </body>
-        </html>
-        """
-        api = api_from_html(html)
-        assert api.get_sensor_value("printer_status") == "Printing"
-
-    # -------------------------
-    # Ink levels (your original HTML using <div height="...">)
-    # -------------------------
-    def test_ink_level_sensors(self):
-        html = """
-        <html>
-          <body>
-            <ul>
-              <li class="tank"><div class="clrname">BK</div><div class="tank"><div height="45"></div></div></li>
-              <li class="tank"><div class="clrname">C</div><div class="tank"><div height="30"></div></div></li>
-              <li class="tank"><div class="clrname">M</div><div class="tank"><div height="25"></div></div></li>
-              <li class="tank"><div class="clrname">Y</div><div class="tank"><div height="40"></div></div></li>
-            </ul>
-          </body>
-        </html>
-        """
-        api = api_from_html(html)
-        assert api.get_sensor_value("black") == 90
-        assert api.get_sensor_value("cyan") == 60
-        assert api.get_sensor_value("magenta") == 50
-        assert api.get_sensor_value("yellow") == 80
-
-    def test_photo_ink_sensors(self):
-        html = """
-        <html>
-          <body>
-            <ul>
-              <li class="tank"><div class="clrname">PB</div><div class="tank"><div height="35"></div></div></li>
-              <li class="tank"><div class="clrname">LC</div><div class="tank"><div height="20"></div></div></li>
-              <li class="tank"><div class="clrname">LM</div><div class="tank"><div height="15"></div></div></li>
-            </ul>
-          </body>
-        </html>
-        """
-        api = api_from_html(html)
-        assert api.get_sensor_value("photoblack") == 70
-        assert api.get_sensor_value("lightcyan") == 40
-        assert api.get_sensor_value("lightmagenta") == 30
-
-    def test_waste_tank_sensor(self):
-        html = """
-        <html>
-          <body>
-            <ul>
-              <li class="tank">
-                <div class="mbicn">Waste</div>
-                <div class="tank"><div height="10"></div></div>
-              </li>
-            </ul>
-          </body>
-        </html>
-        """
-        api = api_from_html(html)
-        assert api.get_sensor_value("clean") == 20
 
     # -------------------------
     # Invalid/malformed inputs

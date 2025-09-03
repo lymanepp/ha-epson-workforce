@@ -33,7 +33,6 @@ class EpsonWorkForceAPI:
 
         self.update()
 
-    # Public properties
     @property
     def model(self) -> str:
         """Returns the model name of the printer."""
@@ -46,9 +45,10 @@ class EpsonWorkForceAPI:
         self._ensure_parsed()
         return (self._data or {}).get("mac_address")
 
-    # Public fetch
     def update(self) -> None:
-        """Fetch and parse the HTML page from the device (rebuilds parser + resets cache)."""
+        """
+        Fetch and parse the HTML page from the device (rebuilds parser + resets cache).
+        """
         try:
             context = ssl._create_unverified_context()
             with urllib.request.urlopen(self._resource, context=context) as response:

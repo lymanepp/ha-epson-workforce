@@ -1,13 +1,12 @@
-"""Epson WorkForce API — same public API, backed by a lightweight EpsonHTMLParser."""
+"""Epson status page parser."""
 
 from __future__ import annotations
 
-import html as html_lib
 import re
 from typing import Any
 
 from bs4 import BeautifulSoup
-from bs4.element import NavigableString, Tag
+from bs4.element import Tag
 
 
 # ----------------------------
@@ -38,14 +37,7 @@ def _clean_key(t: str) -> str:
 
 
 class EpsonHTMLParser:
-    """
-    Minimal, robust parser for Epson status pages across multiple models/skins.
-    - Model from <title> or .header text
-    - Status from fieldsets like #PRT_STATUS / #SCN_STATUS, or .information span
-    - Ink tanks from <li class="tank"> (label in .clrname, bar in inner <div class="tank"> <img height=...>)
-    - Maintenance/waste row detected via <div class="mbicn">
-    - Network & Wi-Fi Direct tables parsed as key/value pairs
-    """
+    """Minimal, robust parser for Epson status pages across multiple models/skins."""
 
     def __init__(self, html_text: str, source: str = ""):
         self.source = source
@@ -85,17 +77,14 @@ class EpsonHTMLParser:
 
     def _parse_statuses(self) -> dict[str, str | None]:
         out: dict[str, str | None] = {}
-        # Known fieldsets
-        for fid, key in (
-            ("PRT_STATUS", "printer_status"),
-            ("SCN_STATUS", "scanner_status"),
-        ):
-            fs = self.soup.find("fieldset", id=fid)
-            if isinstance(fs, Tag):
-                txt = fs.get_text(" ", strip=True)
-                out[key] = self._clean_status(txt)
-        # Fallback for printer status
-        if "printer_status" not in out or not out["printer_status"]:
+
+        fs = self.soup.find("fieldset", id="PRT_STATUS")
+        if isinstance(fs, Tag):
+            txt = fs.get_text(" ", strip=True)
+            out["printer_status"] = self._clean_status(txt)
+
+        # Fallback for printer status: .information span
+        if not out.get("printer_status"):
             info = self.soup.find("div", class_="information")
             if isinstance(info, Tag):
                 span = info.find("span")
@@ -103,6 +92,7 @@ class EpsonHTMLParser:
                     out["printer_status"] = self._clean_status(
                         span.get_text(strip=True)
                     )
+
         return out
 
     @staticmethod
