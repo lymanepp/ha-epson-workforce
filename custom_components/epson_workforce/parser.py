@@ -8,6 +8,8 @@ from typing import Any
 from bs4 import BeautifulSoup
 from bs4.element import Tag
 
+MAX_STATUS_LENGTH = 40
+
 
 # ----------------------------
 # Lightweight HTML page parser
@@ -103,7 +105,7 @@ class EpsonHTMLParser:
         s = re.sub(
             r"^(?:printer|scanner)\s+status\s*[:\-]?\s*", "", s, flags=re.IGNORECASE
         )
-        if len(s) <= 40 and s.endswith("."):
+        if len(s) <= MAX_STATUS_LENGTH and s.endswith("."):
             s = s[:-1]
         return s or None
 

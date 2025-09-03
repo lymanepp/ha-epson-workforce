@@ -1,4 +1,4 @@
-"""Epson WorkForce API — same public API, backed by a lightweight EpsonHTMLParser."""
+"""Epson WorkForce API."""
 
 from __future__ import annotations
 
@@ -6,19 +6,10 @@ import ssl
 from typing import Any
 import urllib.request
 
-from .parser import EpsonHTMLParser  # Adjust the import path as needed
+from .parser import EpsonHTMLParser
 
 
 class EpsonWorkForceAPI:
-    """
-    Public API compatibility:
-      - __init__(ip, path)
-      - update()
-      - get_sensor_value(sensor) -> int|str|None
-      - properties: model, mac_address
-      - attributes: available
-    """
-
     def __init__(self, ip: str, path: str):
         self._resource = "http://" + ip + path
         self.available: bool = True

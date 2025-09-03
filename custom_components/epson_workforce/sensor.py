@@ -36,6 +36,12 @@ SENSOR_TYPES: tuple[SensorEntityDescription, ...] = (
         native_unit_of_measurement=PERCENTAGE,
     ),
     SensorEntityDescription(  # type: ignore[call-arg]
+        key="gray",
+        name="Ink level Gray",
+        icon="mdi:water",
+        native_unit_of_measurement=PERCENTAGE,
+    ),
+    SensorEntityDescription(  # type: ignore[call-arg]
         key="magenta",
         name="Ink level Magenta",
         icon="mdi:water",
@@ -104,7 +110,7 @@ async def async_setup_entry(
         "Detected %d available sensors for printer %s: %s",
         len(available_sensors),
         entry.data["host"],
-        ", ".join(available_sensors)
+        ", ".join(available_sensors),
     )
 
     # Create only sensors that are available on this printer
