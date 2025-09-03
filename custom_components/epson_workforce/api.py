@@ -74,7 +74,6 @@ class EpsonWorkForceAPI:
             "lightcyan": "LC",
             "lightmagenta": "LM",
             "gray": "GY",
-            "grey": "GY",
         }
         if s in label_map:
             inks: dict[str, int] = data.get("inks") or {}
