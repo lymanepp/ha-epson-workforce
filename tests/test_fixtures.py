@@ -1,114 +1,121 @@
-"""Test the Epson WorkForce API using real HTML fixtures."""
+"""Test real fixtures with EpsonHTMLParser."""
 
 import os
-from bs4 import BeautifulSoup
-from unittest.mock import patch
+from typing import Any
 
-from custom_components.epson_workforce.api import EpsonWorkForceAPI
+import pytest
 
-class TestEpsonWorkForceAPIFixtures:
-    """Test class for EpsonWorkForceAPI using real HTML fixtures."""
+from custom_components.epson_workforce.api import EpsonHTMLParser
 
-    def setup_method(self):
-        """Set up test fixtures."""
-        # Mock the update method to avoid network calls
-        with patch.object(EpsonWorkForceAPI, 'update'):
-            self.api = EpsonWorkForceAPI("192.168.1.100", "/PRESENTATION/HTML/TOP/PRTINFO.HTML")
+# ---- Discover all fixtures ----
+HERE = os.path.dirname(__file__)
+FIXTURES_DIR = os.path.join(HERE, "fixtures")
+ALL_FIXTURES = sorted(
+    f for f in os.listdir(FIXTURES_DIR) if f.lower().endswith(".html")
+)
 
-    def load_fixture(self, filename):
-        """Load HTML fixture file."""
-        fixture_path = os.path.join(os.path.dirname(__file__), 'fixtures', filename)
-        with open(fixture_path, 'r', encoding='utf-8') as f:
-            return f.read()
+# ---- Per-file expectations (only list what you care to assert) ----
+# Any keys omitted will be skipped (defaults handle the rest).
+EXPECTATIONS: dict[str, dict[str, Any]] = {
+    "ET-8500.html": {
+        "model": "Epson ET-8500 Series",
+        "printer_status": "Available",
+        "mac_address": "DC:CD:2F:0C:9E:89",
+        "maintenance_box": 36,
+        "inks": {  # subset OK
+            "BK": 26,
+            "PB": 38,
+            "C": 40,
+            "Y": 46,
+            "M": 42,
+            "GY": 44,
+        },
+    },
+    "L6270.html": {
+        "model": "Epson L6270 Series",
+        "printer_status": "Available",
+        "mac_address": "68:55:D4:7E:22:46",
+        "maintenance_box": 90,
+        "inks": {
+            "BK": 68,
+            "M": 80,
+            "Y": 80,
+            "C": 80,
+        },
+    },
+    "WF-3540.html": {
+        "model": "Epson WF-3540 Series",
+        "printer_status": "Available",
+        "mac_address": "B0:E8:92:05:3D:87",
+        "maintenance_box": 42,
+        "inks": {
+            "BK": 26,
+            "M": 72,
+            "Y": 40,
+            "C": 100,
+        },
+    },
+    "WF-7720.html": {
+        "model": "Epson WF-7720 Series",
+        "printer_status": "Available",
+        "mac_address": "38:1A:52:06:27:4A",
+        "maintenance_box": 88,
+        "inks": {
+            "BK": 96,
+            "M": 88,
+            "Y": 76,
+            "C": 64,
+        },
+    },
+}
 
-    def test_et8500(self):
-        """Test ET-8500 Series HTML fixture."""
-        html = self.load_fixture('ET-8500.html')
-        self.api.soup = BeautifulSoup(html, "html.parser")
-        self.api._extract_device_info()
 
-        # Test printer status (uses primary structure: fieldset)
-        status = self.api.get_sensor_value("printer_status")
-        assert status == "Available"
+def _read_fixture_text(name: str) -> str:
+    with open(os.path.join(FIXTURES_DIR, name), encoding="utf-8", errors="ignore") as f:
+        return f.read()
 
-        # Test device information extraction
-        assert self.api.model == "Epson ET-8500 Series"
-        assert self.api.mac_address == "DC:CD:2F:0C:9E:89"
 
-        # Test ink levels - ET-8500 has BK, PB, C, Y, M, GY
-        # Values from HTML: BK=13*2=26, PB=19*2=38, C=20*2=40, Y=23*2=46, M=21*2=42
-        assert self.api.get_sensor_value("black") == 26
-        assert self.api.get_sensor_value("photoblack") == 38
-        assert self.api.get_sensor_value("cyan") == 40
-        assert self.api.get_sensor_value("yellow") == 46
-        assert self.api.get_sensor_value("magenta") == 42
+def _assert_subset(
+    actual: dict[str, Any], expected_subset: dict[str, Any], path: str = ""
+):
+    """Assert that all items in expected_subset appear (recursively) in actual."""
+    for k, v in expected_subset.items():
+        assert k in actual, f"Missing key at {path or '.'}: {k}"
+        if isinstance(v, dict):
+            assert isinstance(actual[k], dict), f"Expected dict at {path}/{k}"
+            _assert_subset(actual[k], v, f"{path}/{k}" if path else k)
+        else:
+            assert (
+                actual[k] == v
+            ), f"Mismatch at {path}/{k if path else k}: {actual[k]!r} != {v!r}"
 
-        # Test waste tank level - ET-8500 waste: height='18' * 2 = 36
-        assert self.api.get_sensor_value("clean") == 36
 
-        # Verify HTML structure - should use primary status structure (fieldset)
-        fieldset = self.api.soup.find("fieldset", id="PRT_STATUS")
-        assert fieldset is not None
-        assert "Available" in fieldset.get_text()
+@pytest.mark.parametrize("fixture_name", ALL_FIXTURES)
+def test_each_fixture_parses_and_matches_expectations(fixture_name: str):
+    """
+    Tests that the HTML fixture for a given printer/scanner parses correctly and matches
+    expected values.
+    """
+    html_text = _read_fixture_text(fixture_name)
+    parser = EpsonHTMLParser(html_text, source=fixture_name)
+    data = parser.parse()
 
-        # Verify ink structure - should have 7 tank elements (6 colors + 1 waste)
-        tanks = self.api.soup.find_all("li", class_="tank")
-        assert len(tanks) == 7
+    # Always do basic sanity checks
+    assert data, "Parser returned empty result"
+    assert isinstance(data, dict), "Parser did not return a dict"
+    assert "model" in data
+    assert "printer_status" in data or "scanner_status" in data
+    assert "inks" in data
+    assert isinstance(data["inks"], dict)
 
-        # Verify color names in order
-        color_names = [tank.find("div", class_="clrname") for tank in tanks]
-        color_texts = [cn.get_text() if cn else None for cn in color_names]
-        expected_colors = ["BK", "PB", "C", "Y", "M", "GY", None]  # Last one is waste tank
-        assert color_texts == expected_colors
+    # Apply per-file expectations if present
+    spec = EXPECTATIONS.get(fixture_name)
+    if spec:
+        # Flatten top-level fields we care about
+        flat_expect = {k: v for k, v in spec.items() if k not in ("inks",)}
+        if flat_expect:
+            _assert_subset(data, flat_expect)
 
-        # Verify waste tank detection
-        waste_tanks = self.api.soup.find_all("div", class_="mbicn")
-        assert len(waste_tanks) == 1
-
-    def test_wf3540(self):
-        """Test WF-3540 Series HTML fixture."""
-        html = self.load_fixture('WF-3540.html')
-        self.api.soup = BeautifulSoup(html, "html.parser")
-        self.api._extract_device_info()
-
-        # Test printer status (uses fallback structure: div.information)
-        status = self.api.get_sensor_value("printer_status")
-        assert status == "Available"
-
-        # Test device information extraction
-        assert self.api.model == "Epson WF-3540 Series"
-        assert self.api.mac_address == "B0:E8:92:05:3D:87"
-
-        # Test ink levels - WF-3540 has BK, M, Y, C
-        # Values from HTML: BK=13*2=26, M=36*2=72, Y=20*2=40, C=50*2=100
-        assert self.api.get_sensor_value("black") == 26
-        assert self.api.get_sensor_value("magenta") == 72
-        assert self.api.get_sensor_value("yellow") == 40
-        assert self.api.get_sensor_value("cyan") == 100
-        assert self.api.get_sensor_value("photoblack") is None
-        assert self.api.get_sensor_value("lightcyan") is None
-        assert self.api.get_sensor_value("lightmagenta") is None
-
-        # Test waste tank level - WF-3540 waste: height='21' * 2 = 42
-        assert self.api.get_sensor_value("clean") == 42
-
-        # Verify HTML structure - should use fallback status structure (div.information)
-        info_div = self.api.soup.find("div", class_="information")
-        assert info_div is not None
-        span = info_div.find("span")
-        assert span is not None
-        assert span.get_text(strip=True) == "Available."
-
-        # Verify ink structure - should have 5 tank elements (4 colors + 1 waste)
-        tanks = self.api.soup.find_all("li", class_="tank")
-        assert len(tanks) == 5
-
-        # Verify color names in order
-        color_names = [tank.find("div", class_="clrname") for tank in tanks]
-        color_texts = [cn.get_text() if cn else None for cn in color_names]
-        expected_colors = ["BK", "M", "Y", "C", None]  # Last one is waste tank
-        assert color_texts == expected_colors
-
-        # Verify waste tank detection
-        waste_tanks = self.api.soup.find_all("div", class_="mbicn")
-        assert len(waste_tanks) == 1
+        # For inks, we assert a subset (fixture may have extra colors)
+        if "inks" in spec:
+            _assert_subset(data.get("inks", {}), spec["inks"], path="inks")
