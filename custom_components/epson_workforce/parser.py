@@ -38,6 +38,10 @@ def _clean_key(t: str) -> str:
     return t
 
 
+def _clean_value(t: str) -> str:
+    return t.replace("\xa0", " ").strip()
+
+
 class EpsonHTMLParser:
     """Minimal, robust parser for Epson status pages across multiple models/skins."""
 
@@ -193,7 +197,7 @@ class EpsonHTMLParser:
             )
             if isinstance(td_key, Tag) and isinstance(td_val, Tag):
                 key = _clean_key(td_key.get_text(" ", strip=True))
-                val = td_val.get_text(" ", strip=True)
+                val = _clean_value(td_val.get_text(" ", strip=True))
                 if key:
                     data[key] = val
         return data

@@ -1,4 +1,5 @@
 """Config flow for Epson WorkForce integration."""
+
 from __future__ import annotations
 
 import logging
@@ -43,6 +44,7 @@ def validate_input(data: dict[str, Any]) -> dict[str, Any]:
     # Return info that you want to store in the config entry.
     return {
         "title": f"Epson WorkForce Printer ({host})",
+        "name": api.name,
         "model": api.model,
         "mac": api.mac_address,
     }
@@ -69,9 +71,7 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         errors: dict[str, str] = {}
 
         try:
-            info = await self.hass.async_add_executor_job(
-                validate_input, user_input
-            )
+            info = await self.hass.async_add_executor_job(validate_input, user_input)
         except CannotConnect:
             errors["base"] = "cannot_connect"
         except Exception:  # pylint: disable=broad-except
@@ -99,19 +99,20 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         if user_input is None:
             # Extract device name from the detected model or use a default
             suggested_name = self._connection_info.get(
-                "model",
-                "Epson WorkForce Printer"
+                "name", "Epson WorkForce Printer"
             )
 
             # Create schema with the suggested device name
-            device_name_schema = vol.Schema({
-                vol.Required(CONF_NAME, default=suggested_name): cv.string,
-            })
+            device_name_schema = vol.Schema(
+                {
+                    vol.Required(CONF_NAME, default=suggested_name): cv.string,
+                }
+            )
 
             return self.async_show_form(
                 step_id="device_name",
                 data_schema=device_name_schema,
-                description_placeholders={"detected_name": suggested_name}
+                description_placeholders={"detected_name": suggested_name},
             )
 
         # User has provided a device name, create the entry

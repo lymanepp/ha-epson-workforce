@@ -33,7 +33,7 @@ EXPECTATIONS: dict[str, dict[str, Any]] = {
         },
         "network": {
             "Signal Strength": "Excellent",
-            "SSID": "The\xa0Bell\xa0Tower\xa0-\xa0IoT",
+            "SSID": "The Bell Tower - IoT",
         },
         "wifi_direct": {
             "Connection Method": "Not Set",
