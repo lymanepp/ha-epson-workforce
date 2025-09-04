@@ -1,14 +1,18 @@
-name: HACS
+name: Validate with HACS
 
 # yamllint disable-line rule:truthy
-on: [push, pull_request]
+on:
+  push:
+  pull_request:
+  schedule:
+    - cron: "0 0 * * *"
 
 jobs:
   hacs:
     name: HACS Action
     runs-on: "ubuntu-latest"
     steps:
-      - uses: "actions/checkout@v5"
+      - uses: actions/checkout@v5
       - name: HACS Action
         uses: "hacs/action@main"
         with:
