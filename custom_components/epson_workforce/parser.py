@@ -50,8 +50,6 @@ class EpsonHTMLParser:
         statuses = self._parse_statuses()
         inks, maintenance = self._parse_inks_and_maintenance()
         network = self._parse_table_by_container_id("info-network")
-        wifi_direct = self._parse_table_by_container_id("info-wfd")
-        mac = network.get("MAC Address") or self._extract_mac_from_text()
 
         out: dict[str, Any] = {
             "source": self.source or model,
@@ -61,9 +59,11 @@ class EpsonHTMLParser:
             "maintenance_box": maintenance,
             "network": network,
         }
-        if wifi_direct:
+        if name := network.get("Device Name") or network.get("Printer Name"):
+            out["name"] = name
+        if wifi_direct := self._parse_table_by_container_id("info-wfd"):
             out["wifi_direct"] = wifi_direct
-        if mac:
+        if mac := network.get("MAC Address") or self._extract_mac_from_text():
             out["mac_address"] = mac
         return out
 

@@ -26,6 +26,12 @@ class EpsonWorkForceAPI:
         self.update()
 
     @property
+    def name(self) -> str | None:
+        """Returns the name of the printer."""
+        self._ensure_parsed()
+        return (self._data or {}).get("name")
+
+    @property
     def model(self) -> str:
         """Returns the model name of the printer."""
         self._ensure_parsed()

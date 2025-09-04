@@ -18,6 +18,7 @@ ALL_FIXTURES = sorted(
 # Any keys omitted will be skipped (defaults handle the rest).
 EXPECTATIONS: dict[str, dict[str, Any]] = {
     "ET-8500.html": {
+        "name": "EPSON0C9E89",
         "model": "Epson ET-8500 Series",
         "printer_status": "Available",
         "mac_address": "DC:CD:2F:0C:9E:89",
@@ -31,7 +32,6 @@ EXPECTATIONS: dict[str, dict[str, Any]] = {
             "GY": 44,
         },
         "network": {
-            "Device Name": "EPSON0C9E89",
             "Signal Strength": "Excellent",
             "SSID": "The\xa0Bell\xa0Tower\xa0-\xa0IoT",
         },
@@ -40,6 +40,7 @@ EXPECTATIONS: dict[str, dict[str, Any]] = {
         },
     },
     "L6270.html": {
+        "name": "EPSON7E2246",
         "model": "Epson L6270 Series",
         "printer_status": "Available",
         "mac_address": "68:55:D4:7E:22:46",
@@ -51,7 +52,6 @@ EXPECTATIONS: dict[str, dict[str, Any]] = {
             "C": 80,
         },
         "network": {
-            "Device Name": "EPSON7E2246",
             "Signal Strength": "Excellent",
             "SSID": "eLeCtRoN-Lan-SD",
         },
@@ -60,6 +60,7 @@ EXPECTATIONS: dict[str, dict[str, Any]] = {
         },
     },
     "WF-3540.html": {
+        "name": "EPSON053D87",
         "model": "Epson WF-3540 Series",
         "printer_status": "Available",
         "mac_address": "B0:E8:92:05:3D:87",
@@ -71,13 +72,13 @@ EXPECTATIONS: dict[str, dict[str, Any]] = {
             "C": 100,
         },
         "network": {
-            "Printer Name": "EPSON053D87",  # Note: "Printer Name" on some models
             "Signal Strength": "Excellent",
             "SSID": "CHAOS",
         },
         # No wifi_direct section - this model doesn't support it
     },
     "WF-7720.html": {
+        "name": "EPSON06274A",
         "model": "Epson WF-7720 Series",
         "printer_status": "Available",
         "mac_address": "38:1A:52:06:27:4A",
@@ -89,7 +90,6 @@ EXPECTATIONS: dict[str, dict[str, Any]] = {
             "C": 64,
         },
         "network": {
-            "Device Name": "EPSON06274A",
             "Signal Strength": "Excellent",
             "SSID": "knappe-home",
         },
