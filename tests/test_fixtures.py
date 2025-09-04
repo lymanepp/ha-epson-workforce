@@ -142,7 +142,9 @@ def test_each_fixture_parses_and_matches_expectations(fixture_name: str):
     spec = EXPECTATIONS.get(fixture_name)
     if spec:
         # Flatten top-level fields we care about (excluding nested dicts)
-        flat_expect = {k: v for k, v in spec.items() if k not in ("inks", "network", "wifi_direct")}
+        flat_expect = {
+            k: v for k, v in spec.items() if k not in ("inks", "network", "wifi_direct")
+        }
         if flat_expect:
             _assert_subset(data, flat_expect)
 
@@ -158,4 +160,6 @@ def test_each_fixture_parses_and_matches_expectations(fixture_name: str):
 
         # For wifi_direct data, we assert a subset
         if "wifi_direct" in spec:
-            _assert_subset(data.get("wifi_direct", {}), spec["wifi_direct"], path="wifi_direct")
+            _assert_subset(
+                data.get("wifi_direct", {}), spec["wifi_direct"], path="wifi_direct"
+            )
