@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from datetime import timedelta
 import logging
-import re
 
 from homeassistant.components.sensor import SensorEntity, SensorEntityDescription
 from homeassistant.config_entries import ConfigEntry
@@ -18,6 +17,7 @@ from homeassistant.helpers.update_coordinator import (
     DataUpdateCoordinator,
     UpdateFailed,
 )
+from homeassistant.util import slugify
 
 from . import DOMAIN
 from .api import EpsonWorkForceAPI
@@ -222,27 +222,15 @@ class EpsonPrinterCartridge(CoordinatorEntity, SensorEntity):
         super().__init__(coordinator)
         self.entity_description = description
         self._host = host
-        self._host_clean = host.replace(".", "_").replace(":", "_")
-        self._device_name = device_name
-
-        # Create a clean device name for use in entity names and IDs
-        if device_name:
-            # Clean the device name for use in entity names and IDs
-            # Remove special characters and replace spaces with underscores
-            self._device_name_clean = re.sub(r"[^a-zA-Z0-9\s]", "", device_name)
-            self._device_name_clean = self._device_name_clean.replace(" ", "_").lower()
-        else:
-            self._device_name_clean = f"epson_workforce_{self._host_clean}"
+        self._device_name = device_name or f"Epson WorkForce ({self._host})"
+        self._device_name_clean = slugify(device_name)
 
     @property
     def device_info(self) -> DeviceInfo | None:  # type: ignore[override]
         """Return device information for this printer."""
-        # Use custom device name if provided, otherwise fallback to default
-        device_name = self._device_name or f"Epson WorkForce Printer ({self._host})"
-
         device_info = DeviceInfo(
             identifiers={(DOMAIN, self._host)},
-            name=device_name,
+            name=self._device_name,
             manufacturer="Epson",
             model=self.coordinator.api.model,
         )
