@@ -58,28 +58,14 @@ class EpsonWorkForceAPI:
         self._ensure_parsed()
         data = self._data or {}
 
-        s = (sensor or "").strip().lower()
-        if s == "printer_status":
+        if sensor == "printer_status":
             return data.get("printer_status") or "Unknown"
 
-        if s == "clean":
+        if sensor == "clean":
             return data.get("maintenance_box")
 
-        label_map = {
-            "black": "BK",
-            "cyan": "C",
-            "magenta": "M",
-            "yellow": "Y",
-            "photoblack": "PB",
-            "lightcyan": "LC",
-            "lightmagenta": "LM",
-            "gray": "GY",
-        }
-        if s in label_map:
-            inks: dict[str, int] = data.get("inks") or {}
-            return inks.get(label_map[s])
-
-        return None
+        inks: dict[str, int] = data.get("inks") or {}
+        return inks.get(sensor)
 
     def _ensure_parsed(self) -> None:
         if self._data is not None:
@@ -89,5 +75,4 @@ class EpsonWorkForceAPI:
         try:
             self._data = self._parser.parse()
         except Exception:
-            # Leave _data as None to keep Unknown/None behavior
             self._data = {}

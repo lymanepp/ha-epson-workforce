@@ -118,7 +118,7 @@ class TestEpsonWorkForceAPI:
         </ul></body></html>
         """
         api = api_from_html(html)
-        assert api.get_sensor_value("black") is None
+        assert api.get_sensor_value("BK") is None
 
         # Missing inner tank
         html = """
@@ -127,7 +127,7 @@ class TestEpsonWorkForceAPI:
         </ul></body></html>
         """
         api = api_from_html(html)
-        assert api.get_sensor_value("black") is None
+        assert api.get_sensor_value("BK") is None
 
     # -------------------------
     # Device info extraction
@@ -167,7 +167,7 @@ class TestEpsonWorkForceAPI:
         with patch("urllib.request.urlopen", side_effect=Exception("offline")):
             api = EpsonWorkForceAPI("127.0.0.1", "/test")
         assert api.get_sensor_value("printer_status") == "Unknown"
-        assert api.get_sensor_value("black") is None
+        assert api.get_sensor_value("BK") is None
         assert api.model == "WorkForce Printer"
         assert api.mac_address is None
 
@@ -179,7 +179,7 @@ class TestEpsonWorkForceAPI:
         </ul></body></html>
         """
         api = api_from_html(html)
-        assert api.get_sensor_value("black") is None
+        assert api.get_sensor_value("BK") is None
 
         # Wrong class names
         html = """
@@ -188,7 +188,7 @@ class TestEpsonWorkForceAPI:
         </ul></body></html>
         """
         api = api_from_html(html)
-        assert api.get_sensor_value("black") is None
+        assert api.get_sensor_value("BK") is None
 
         # Non-numeric height
         html = """
@@ -197,7 +197,7 @@ class TestEpsonWorkForceAPI:
         </ul></body></html>
         """
         api = api_from_html(html)
-        assert api.get_sensor_value("black") is None
+        assert api.get_sensor_value("BK") is None
 
         # Missing everything
         html = "<html><body></body></html>"
