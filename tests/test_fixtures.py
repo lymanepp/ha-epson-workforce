@@ -30,6 +30,13 @@ EXPECTATIONS: dict[str, dict[str, Any]] = {
             "M": 42,
             "GY": 44,
         },
+        "network": {
+            "Signal Strength": "Excellent",
+            "SSID": "The Bell Tower - IoT",  # Will be normalized from non-breaking spaces
+        },
+        "wifi_direct": {
+            "Connection Method": "Not Set",
+        },
     },
     "L6270.html": {
         "model": "Epson L6270 Series",
@@ -41,6 +48,13 @@ EXPECTATIONS: dict[str, dict[str, Any]] = {
             "M": 80,
             "Y": 80,
             "C": 80,
+        },
+        "network": {
+            "Signal Strength": "Excellent",
+            "SSID": "eLeCtRoN-Lan-SD",
+        },
+        "wifi_direct": {
+            "Connection Method": "Not Set",
         },
     },
     "WF-3540.html": {
@@ -54,6 +68,11 @@ EXPECTATIONS: dict[str, dict[str, Any]] = {
             "Y": 40,
             "C": 100,
         },
+        "network": {
+            "Signal Strength": "Excellent",
+            "SSID": "CHAOS",
+        },
+        # No wifi_direct section - this model doesn't support it
     },
     "WF-7720.html": {
         "model": "Epson WF-7720 Series",
@@ -65,6 +84,13 @@ EXPECTATIONS: dict[str, dict[str, Any]] = {
             "M": 88,
             "Y": 76,
             "C": 64,
+        },
+        "network": {
+            "Signal Strength": "Excellent",
+            "SSID": "knappe-home",
+        },
+        "wifi_direct": {
+            "Connection Method": "Not Set",
         },
     },
 }
@@ -111,11 +137,25 @@ def test_each_fixture_parses_and_matches_expectations(fixture_name: str):
     # Apply per-file expectations if present
     spec = EXPECTATIONS.get(fixture_name)
     if spec:
-        # Flatten top-level fields we care about
-        flat_expect = {k: v for k, v in spec.items() if k not in ("inks",)}
+        # Flatten top-level fields we care about (excluding nested dicts)
+        flat_expect = {k: v for k, v in spec.items() if k not in ("inks", "network", "wifi_direct")}
         if flat_expect:
             _assert_subset(data, flat_expect)
 
         # For inks, we assert a subset (fixture may have extra colors)
         if "inks" in spec:
             _assert_subset(data.get("inks", {}), spec["inks"], path="inks")
+
+        # For network data, we assert a subset
+        if "network" in spec:
+            network_data = data.get("network", {})
+            network_spec = spec["network"]
+            # Normalize SSID for comparison (handle non-breaking spaces)
+            if "SSID" in network_data and "SSID" in network_spec:
+                normalized_ssid = network_data["SSID"].replace('\xa0', ' ')
+                network_data = {**network_data, "SSID": normalized_ssid}
+            _assert_subset(network_data, network_spec, path="network")
+
+        # For wifi_direct data, we assert a subset
+        if "wifi_direct" in spec:
+            _assert_subset(data.get("wifi_direct", {}), spec["wifi_direct"], path="wifi_direct")

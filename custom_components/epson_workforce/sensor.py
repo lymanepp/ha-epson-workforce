@@ -10,6 +10,7 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import PERCENTAGE
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.device_registry import DeviceInfo
+from homeassistant.helpers.entity import EntityCategory
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import (
     CoordinatorEntity,
@@ -82,6 +83,30 @@ SENSOR_TYPES: tuple[SensorEntityDescription, ...] = (
         name="Printer Status",
         icon="mdi:printer",
     ),
+    SensorEntityDescription(  # type: ignore[call-arg]
+        key="ip_address",
+        name="IP Address",
+        icon="mdi:ip-network",
+        entity_category=EntityCategory.DIAGNOSTIC,
+    ),
+    SensorEntityDescription(  # type: ignore[call-arg]
+        key="signal_strength",
+        name="Signal Strength",
+        icon="mdi:wifi-strength-4",
+        entity_category=EntityCategory.DIAGNOSTIC,
+    ),
+    SensorEntityDescription(  # type: ignore[call-arg]
+        key="ssid",
+        name="WiFi Network",
+        icon="mdi:wifi-settings",
+        entity_category=EntityCategory.DIAGNOSTIC,
+    ),
+    SensorEntityDescription(  # type: ignore[call-arg]
+        key="wifi_direct_connection_method",
+        name="WiFi Direct Connection",
+        icon="mdi:connection",
+        entity_category=EntityCategory.DIAGNOSTIC,
+    ),
 )
 
 SCAN_INTERVAL = timedelta(seconds=60)
@@ -140,8 +165,11 @@ def _detect_available_sensors(api: EpsonWorkForceAPI) -> list[str]:
         # Consider a sensor available if:
         # - It returns a non-None value
         # - For numeric sensors: value > 0 or value == 0 (some tanks might be empty)
-        # - For string sensors (like printer_status): any string value
+        # - For string sensors: any string value except "Unknown" (no data)
         if value is not None and isinstance(value, str | int | float):
+            # For diagnostic sensors, don't create if value is "Unknown" (no data)
+            if isinstance(value, str) and value == "Unknown":
+                continue
             available_sensors.append(sensor_key)
 
     return available_sensors

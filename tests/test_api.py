@@ -203,3 +203,112 @@ class TestEpsonWorkForceAPI:
         html = "<html><body></body></html>"
         api = api_from_html(html)
         assert api.get_sensor_value("printer_status") == "Unknown"
+
+
+class TestDiagnosticSensors:
+    """Test diagnostic sensor conditional creation logic."""
+
+    def test_diagnostic_sensors_with_network_data(self):
+        """Test that network diagnostic sensors are created when data is available."""
+        from custom_components.epson_workforce.sensor import _detect_available_sensors
+
+        # Mock data with network information
+        api = EpsonWorkForceAPI("192.168.1.100", "/test")
+        api._data = {
+            "network": {
+                "Signal Strength": "Excellent",
+                "SSID": "TestNetwork",
+            },
+            "inks": {"BK": 50, "M": 30},
+            "printer_status": "Available",
+        }
+
+        available_sensors = _detect_available_sensors(api)
+
+        # Network diagnostics should be available
+        assert "signal_strength" in available_sensors
+        assert "ssid" in available_sensors
+        assert "ip_address" in available_sensors
+
+        # Verify values are not "Unknown"
+        assert api.get_sensor_value("signal_strength") == "Excellent"
+        assert api.get_sensor_value("ssid") == "TestNetwork"
+
+    def test_diagnostic_sensors_without_network_data(self):
+        """Test that network diagnostic sensors are not created when data is missing."""
+        from custom_components.epson_workforce.sensor import _detect_available_sensors
+
+        # Mock data without network information
+        api = EpsonWorkForceAPI("192.168.1.100", "/test")
+        api._data = {
+            "inks": {"BK": 50, "M": 30},
+            "printer_status": "Available",
+            "maintenance_box": 20
+            # No network data
+        }
+
+        available_sensors = _detect_available_sensors(api)
+
+        # Network diagnostics should NOT be available
+        assert "signal_strength" not in available_sensors
+        assert "ssid" not in available_sensors
+        assert "wifi_direct_connection_method" not in available_sensors
+
+        # IP address should still be available
+        assert "ip_address" in available_sensors
+
+        # Basic sensors should be available
+        assert "BK" in available_sensors
+        assert "M" in available_sensors
+        assert "printer_status" in available_sensors
+
+        # Verify that diagnostic sensors would return "Unknown"
+        assert api.get_sensor_value("signal_strength") == "Unknown"
+        assert api.get_sensor_value("ssid") == "Unknown"
+        assert api.get_sensor_value("wifi_direct_connection_method") == "Unknown"
+
+    def test_diagnostic_sensors_with_wifi_direct_data(self):
+        """Test that WiFi Direct diagnostic sensors are created when data is available."""
+        from custom_components.epson_workforce.sensor import _detect_available_sensors
+
+        # Mock data with WiFi Direct information
+        api = EpsonWorkForceAPI("192.168.1.100", "/test")
+        api._data = {
+            "wifi_direct": {
+                "Connection Method": "Not Set",
+            },
+            "inks": {"BK": 50, "M": 30},
+            "printer_status": "Available",
+        }
+
+        available_sensors = _detect_available_sensors(api)
+
+        # WiFi Direct diagnostics should be available
+        assert "wifi_direct_connection_method" in available_sensors
+        assert "ip_address" in available_sensors
+
+        # Verify values are not "Unknown"
+        assert api.get_sensor_value("wifi_direct_connection_method") == "Not Set"
+
+    def test_diagnostic_sensors_with_minimal_data(self):
+        """Test that only basic sensors are created with minimal data."""
+        from custom_components.epson_workforce.sensor import _detect_available_sensors
+
+        # Mock data with only basic information
+        api = EpsonWorkForceAPI("192.168.1.100", "/test")
+        api._data = {
+            "inks": {"BK": 50},
+            "printer_status": "Available",
+        }
+
+        available_sensors = _detect_available_sensors(api)
+
+        # Only basic sensors should be available
+        assert "ip_address" in available_sensors
+        assert "BK" in available_sensors
+        assert "printer_status" in available_sensors
+
+        # No diagnostic sensors should be available
+        assert "signal_strength" not in available_sensors
+        assert "ssid" not in available_sensors
+        assert "wifi_direct_connection_method" not in available_sensors
