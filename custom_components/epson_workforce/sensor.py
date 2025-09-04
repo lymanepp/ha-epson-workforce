@@ -24,43 +24,49 @@ _LOGGER = logging.getLogger(__name__)
 
 SENSOR_TYPES: tuple[SensorEntityDescription, ...] = (
     SensorEntityDescription(  # type: ignore[call-arg]
-        key="black",
+        key="BK",
         name="Ink level Black",
         icon="mdi:water",
         native_unit_of_measurement=PERCENTAGE,
     ),
     SensorEntityDescription(  # type: ignore[call-arg]
-        key="photoblack",
+        key="PB",
         name="Ink level Photoblack",
         icon="mdi:water",
         native_unit_of_measurement=PERCENTAGE,
     ),
     SensorEntityDescription(  # type: ignore[call-arg]
-        key="magenta",
+        key="GY",
+        name="Ink level Gray",
+        icon="mdi:water",
+        native_unit_of_measurement=PERCENTAGE,
+    ),
+    SensorEntityDescription(  # type: ignore[call-arg]
+        key="M",
         name="Ink level Magenta",
         icon="mdi:water",
         native_unit_of_measurement=PERCENTAGE,
     ),
     SensorEntityDescription(  # type: ignore[call-arg]
-        key="cyan",
+        key="C",
         name="Ink level Cyan",
         icon="mdi:water",
         native_unit_of_measurement=PERCENTAGE,
     ),
     SensorEntityDescription(  # type: ignore[call-arg]
-        key="yellow",
+        key="Y",
         name="Ink level Yellow",
         icon="mdi:water",
         native_unit_of_measurement=PERCENTAGE,
     ),
     SensorEntityDescription(  # type: ignore[call-arg]
-        key="lightcyan",
+        key="LC",
         name="Ink level Light Cyan",
         icon="mdi:water",
         native_unit_of_measurement=PERCENTAGE,
     ),
     SensorEntityDescription(  # type: ignore[call-arg]
-        key="lightmagenta",
+        key="LM",
         name="Ink level Light Magenta",
         icon="mdi:water",
         native_unit_of_measurement=PERCENTAGE,
@@ -104,7 +110,7 @@ async def async_setup_entry(
         "Detected %d available sensors for printer %s: %s",
         len(available_sensors),
         entry.data["host"],
-        ", ".join(available_sensors)
+        ", ".join(available_sensors),
     )
 
     # Create only sensors that are available on this printer
@@ -209,6 +215,7 @@ class EpsonPrinterCartridge(CoordinatorEntity, SensorEntity):
         """Return a unique ID for this sensor."""
         return f"epson_workforce_{self._host_clean}_{self.entity_description.key}"
 
+    @property
     def native_value(self):
         """Return the state of the device."""
         return self.coordinator.api.get_sensor_value(self.entity_description.key)
