@@ -114,8 +114,9 @@ async def async_setup_entry(
     )
 
     # Create only sensors that are available on this printer
+    device_name = entry.data.get("name")  # Get custom device name from config
     sensors = [
-        EpsonPrinterCartridge(coordinator, description, entry.data["host"])
+        EpsonPrinterCartridge(coordinator, description, entry.data["host"], device_name)
         for description in SENSOR_TYPES
         if description.key in available_sensors
     ]
@@ -185,19 +186,34 @@ class EpsonPrinterCartridge(CoordinatorEntity, SensorEntity):
         coordinator: EpsonWorkForceDataUpdateCoordinator,
         description: SensorEntityDescription,
         host: str,
+        device_name: str | None = None,
     ) -> None:
         """Initialize a cartridge sensor."""
         super().__init__(coordinator)
         self.entity_description = description
         self._host = host
         self._host_clean = host.replace(".", "_").replace(":", "_")
+        self._device_name = device_name
+
+        # Create a clean device name for use in entity names and IDs
+        if device_name:
+            # Clean the device name for use in entity names and IDs
+            # Remove special characters and replace spaces with underscores
+            import re
+            self._device_name_clean = re.sub(r'[^a-zA-Z0-9\s]', '', device_name)
+            self._device_name_clean = self._device_name_clean.replace(' ', '_').lower()
+        else:
+            self._device_name_clean = f"epson_workforce_{self._host_clean}"
 
     @property
     def device_info(self) -> DeviceInfo | None:  # type: ignore[override]
         """Return device information for this printer."""
+        # Use custom device name if provided, otherwise fallback to default
+        device_name = self._device_name or f"Epson WorkForce Printer ({self._host})"
+
         device_info = DeviceInfo(
             identifiers={(DOMAIN, self._host)},
-            name=f"Epson WorkForce Printer ({self._host})",
+            name=device_name,
             manufacturer="Epson",
             model=self.coordinator.api.model,
         )
@@ -211,9 +227,19 @@ class EpsonPrinterCartridge(CoordinatorEntity, SensorEntity):
         return device_info
 
     @property
+    def name(self) -> str | None:  # type: ignore[override]
+        """Return the name of the sensor."""
+        entity_name = self.entity_description.name
+        if not isinstance(entity_name, str):
+            return None
+        if self._device_name:
+            return f"{self._device_name} {entity_name}"
+        return entity_name
+
+    @property
     def unique_id(self) -> str | None:  # type: ignore[override]
         """Return a unique ID for this sensor."""
-        return f"epson_workforce_{self._host_clean}_{self.entity_description.key}"
+        return f"{self._device_name_clean}_{self.entity_description.key}"
 
     @property
     def native_value(self):

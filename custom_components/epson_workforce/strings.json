@@ -8,6 +8,13 @@
           "host": "IP Address",
           "path": "Status Page Path"
         }
+      },
+      "device_name": {
+        "title": "Device Name",
+        "description": "We detected your printer as \"{detected_name}\". You can customize the device name below.",
+        "data": {
+          "name": "Device Name"
+        }
       }
     },
     "error": {

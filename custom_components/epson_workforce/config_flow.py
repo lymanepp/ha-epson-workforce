@@ -6,7 +6,7 @@ from typing import Any
 
 from homeassistant import config_entries
 from homeassistant.config_entries import ConfigFlowResult
-from homeassistant.const import CONF_HOST, CONF_PATH
+from homeassistant.const import CONF_HOST, CONF_NAME, CONF_PATH
 import homeassistant.helpers.config_validation as cv
 import voluptuous as vol
 
@@ -53,6 +53,10 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
     VERSION = 1
 
+    def __init__(self) -> None:
+        """Initialize the config flow."""
+        self._connection_info: dict[str, Any] = {}
+
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
@@ -78,11 +82,49 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             await self.async_set_unique_id(user_input[CONF_HOST])
             self._abort_if_unique_id_configured()
 
-            return self.async_create_entry(title=info["title"], data=user_input)
+            # Store connection info and move to device name step
+            self._connection_info = user_input
+            self._connection_info.update(info)
+
+            return await self.async_step_device_name()
 
         return self.async_show_form(
             step_id="user", data_schema=STEP_USER_DATA_SCHEMA, errors=errors
         )
+
+    async def async_step_device_name(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Handle the device name configuration step."""
+        if user_input is None:
+            # Extract device name from the detected model or use a default
+            suggested_name = self._connection_info.get(
+                "model",
+                "Epson WorkForce Printer"
+            )
+
+            # Create schema with the suggested device name
+            device_name_schema = vol.Schema({
+                vol.Required(CONF_NAME, default=suggested_name): cv.string,
+            })
+
+            return self.async_show_form(
+                step_id="device_name",
+                data_schema=device_name_schema,
+                description_placeholders={"detected_name": suggested_name}
+            )
+
+        # User has provided a device name, create the entry
+        device_name = user_input[CONF_NAME]
+
+        # Prepare final data for the config entry
+        config_data = {
+            CONF_HOST: self._connection_info[CONF_HOST],
+            CONF_PATH: self._connection_info[CONF_PATH],
+            CONF_NAME: device_name,
+        }
+
+        return self.async_create_entry(title=device_name, data=config_data)
 
 
 class CannotConnect(Exception):
