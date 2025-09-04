@@ -12,6 +12,7 @@ from .parser import EpsonHTMLParser
 class EpsonWorkForceAPI:
     def __init__(self, ip: str, path: str):
         self._resource = "http://" + ip + path
+        self._ip = ip  # Store IP address for diagnostic sensor
         self.available: bool = True
 
         # Internal
@@ -23,6 +24,12 @@ class EpsonWorkForceAPI:
         self._mac: str | None = None
 
         self.update()
+
+    @property
+    def name(self) -> str | None:
+        """Returns the name of the printer."""
+        self._ensure_parsed()
+        return (self._data or {}).get("name")
 
     @property
     def model(self) -> str:
@@ -58,12 +65,26 @@ class EpsonWorkForceAPI:
         self._ensure_parsed()
         data = self._data or {}
 
+        # Handle special sensors
         if sensor == "printer_status":
             return data.get("printer_status") or "Unknown"
-
         if sensor == "clean":
             return data.get("maintenance_box")
+        if sensor == "ip_address":
+            return self._ip
 
+        # Network diagnostics
+        if sensor in ("signal_strength", "ssid"):
+            network = data.get("network", {})
+            network_key = "Signal Strength" if sensor == "signal_strength" else "SSID"
+            return network.get(network_key) or "Unknown"
+
+        # WiFi Direct diagnostics
+        if sensor == "wifi_direct_connection_method":
+            wifi_direct = data.get("wifi_direct", {})
+            return wifi_direct.get("Connection Method") or "Unknown"
+
+        # Default to ink sensors
         inks: dict[str, int] = data.get("inks") or {}
         return inks.get(sensor)
 

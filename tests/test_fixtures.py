@@ -18,6 +18,7 @@ ALL_FIXTURES = sorted(
 # Any keys omitted will be skipped (defaults handle the rest).
 EXPECTATIONS: dict[str, dict[str, Any]] = {
     "ET-8500.html": {
+        "name": "EPSON0C9E89",
         "model": "Epson ET-8500 Series",
         "printer_status": "Available",
         "mac_address": "DC:CD:2F:0C:9E:89",
@@ -30,8 +31,16 @@ EXPECTATIONS: dict[str, dict[str, Any]] = {
             "M": 42,
             "GY": 44,
         },
+        "network": {
+            "Signal Strength": "Excellent",
+            "SSID": "The Bell Tower - IoT",
+        },
+        "wifi_direct": {
+            "Connection Method": "Not Set",
+        },
     },
     "L6270.html": {
+        "name": "EPSON7E2246",
         "model": "Epson L6270 Series",
         "printer_status": "Available",
         "mac_address": "68:55:D4:7E:22:46",
@@ -42,8 +51,16 @@ EXPECTATIONS: dict[str, dict[str, Any]] = {
             "Y": 80,
             "C": 80,
         },
+        "network": {
+            "Signal Strength": "Excellent",
+            "SSID": "eLeCtRoN-Lan-SD",
+        },
+        "wifi_direct": {
+            "Connection Method": "Not Set",
+        },
     },
     "WF-3540.html": {
+        "name": "EPSON053D87",
         "model": "Epson WF-3540 Series",
         "printer_status": "Available",
         "mac_address": "B0:E8:92:05:3D:87",
@@ -54,8 +71,14 @@ EXPECTATIONS: dict[str, dict[str, Any]] = {
             "Y": 40,
             "C": 100,
         },
+        "network": {
+            "Signal Strength": "Excellent",
+            "SSID": "CHAOS",
+        },
+        # No wifi_direct section - this model doesn't support it
     },
     "WF-7720.html": {
+        "name": "EPSON06274A",
         "model": "Epson WF-7720 Series",
         "printer_status": "Available",
         "mac_address": "38:1A:52:06:27:4A",
@@ -65,6 +88,13 @@ EXPECTATIONS: dict[str, dict[str, Any]] = {
             "M": 88,
             "Y": 76,
             "C": 64,
+        },
+        "network": {
+            "Signal Strength": "Excellent",
+            "SSID": "knappe-home",
+        },
+        "wifi_direct": {
+            "Connection Method": "Not Set",
         },
     },
 }
@@ -111,11 +141,25 @@ def test_each_fixture_parses_and_matches_expectations(fixture_name: str):
     # Apply per-file expectations if present
     spec = EXPECTATIONS.get(fixture_name)
     if spec:
-        # Flatten top-level fields we care about
-        flat_expect = {k: v for k, v in spec.items() if k not in ("inks",)}
+        # Flatten top-level fields we care about (excluding nested dicts)
+        flat_expect = {
+            k: v for k, v in spec.items() if k not in ("inks", "network", "wifi_direct")
+        }
         if flat_expect:
             _assert_subset(data, flat_expect)
 
         # For inks, we assert a subset (fixture may have extra colors)
         if "inks" in spec:
             _assert_subset(data.get("inks", {}), spec["inks"], path="inks")
+
+        # For network data, we assert a subset
+        if "network" in spec:
+            network_data = data.get("network", {})
+            network_spec = spec["network"]
+            _assert_subset(network_data, network_spec, path="network")
+
+        # For wifi_direct data, we assert a subset
+        if "wifi_direct" in spec:
+            _assert_subset(
+                data.get("wifi_direct", {}), spec["wifi_direct"], path="wifi_direct"
+            )

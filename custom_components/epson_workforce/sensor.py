@@ -10,12 +10,14 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import PERCENTAGE
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.device_registry import DeviceInfo
+from homeassistant.helpers.entity import EntityCategory
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import (
     CoordinatorEntity,
     DataUpdateCoordinator,
     UpdateFailed,
 )
+from homeassistant.util import slugify
 
 from . import DOMAIN
 from .api import EpsonWorkForceAPI
@@ -81,6 +83,31 @@ SENSOR_TYPES: tuple[SensorEntityDescription, ...] = (
         key="printer_status",
         name="Printer Status",
         icon="mdi:printer",
+        entity_category=EntityCategory.DIAGNOSTIC,
+    ),
+    SensorEntityDescription(  # type: ignore[call-arg]
+        key="ip_address",
+        name="IP Address",
+        icon="mdi:ip-network",
+        entity_category=EntityCategory.DIAGNOSTIC,
+    ),
+    SensorEntityDescription(  # type: ignore[call-arg]
+        key="signal_strength",
+        name="Signal Strength",
+        icon="mdi:wifi-strength-4",
+        entity_category=EntityCategory.DIAGNOSTIC,
+    ),
+    SensorEntityDescription(  # type: ignore[call-arg]
+        key="ssid",
+        name="WiFi Network",
+        icon="mdi:wifi-settings",
+        entity_category=EntityCategory.DIAGNOSTIC,
+    ),
+    SensorEntityDescription(  # type: ignore[call-arg]
+        key="wifi_direct_connection_method",
+        name="WiFi Direct Connection",
+        icon="mdi:connection",
+        entity_category=EntityCategory.DIAGNOSTIC,
     ),
 )
 
@@ -114,8 +141,9 @@ async def async_setup_entry(
     )
 
     # Create only sensors that are available on this printer
+    device_name = entry.data.get("name")  # Get custom device name from config
     sensors = [
-        EpsonPrinterCartridge(coordinator, description, entry.data["host"])
+        EpsonPrinterCartridge(coordinator, description, entry.data["host"], device_name)
         for description in SENSOR_TYPES
         if description.key in available_sensors
     ]
@@ -139,8 +167,11 @@ def _detect_available_sensors(api: EpsonWorkForceAPI) -> list[str]:
         # Consider a sensor available if:
         # - It returns a non-None value
         # - For numeric sensors: value > 0 or value == 0 (some tanks might be empty)
-        # - For string sensors (like printer_status): any string value
+        # - For string sensors: any string value except "Unknown" (no data)
         if value is not None and isinstance(value, str | int | float):
+            # For diagnostic sensors, don't create if value is "Unknown" (no data)
+            if isinstance(value, str) and value == "Unknown":
+                continue
             available_sensors.append(sensor_key)
 
     return available_sensors
@@ -185,19 +216,21 @@ class EpsonPrinterCartridge(CoordinatorEntity, SensorEntity):
         coordinator: EpsonWorkForceDataUpdateCoordinator,
         description: SensorEntityDescription,
         host: str,
+        device_name: str | None = None,
     ) -> None:
         """Initialize a cartridge sensor."""
         super().__init__(coordinator)
         self.entity_description = description
         self._host = host
-        self._host_clean = host.replace(".", "_").replace(":", "_")
+        self._device_name = device_name or f"Epson WorkForce ({self._host})"
+        self._device_name_clean = slugify(device_name)
 
     @property
     def device_info(self) -> DeviceInfo | None:  # type: ignore[override]
         """Return device information for this printer."""
         device_info = DeviceInfo(
             identifiers={(DOMAIN, self._host)},
-            name=f"Epson WorkForce Printer ({self._host})",
+            name=self._device_name,
             manufacturer="Epson",
             model=self.coordinator.api.model,
         )
@@ -211,9 +244,19 @@ class EpsonPrinterCartridge(CoordinatorEntity, SensorEntity):
         return device_info
 
     @property
+    def name(self) -> str | None:  # type: ignore[override]
+        """Return the name of the sensor."""
+        entity_name = self.entity_description.name
+        if not isinstance(entity_name, str):
+            return None
+        if self._device_name:
+            return f"{self._device_name} {entity_name}"
+        return entity_name
+
+    @property
     def unique_id(self) -> str | None:  # type: ignore[override]
         """Return a unique ID for this sensor."""
-        return f"epson_workforce_{self._host_clean}_{self.entity_description.key}"
+        return f"{self._device_name_clean}_{self.entity_description.key}"
 
     @property
     def native_value(self):
