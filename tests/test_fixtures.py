@@ -31,8 +31,9 @@ EXPECTATIONS: dict[str, dict[str, Any]] = {
             "GY": 44,
         },
         "network": {
+            "Device Name": "EPSON0C9E89",
             "Signal Strength": "Excellent",
-            "SSID": "The Bell Tower - IoT",  # Will be normalized from non-breaking spaces
+            "SSID": "The\xa0Bell\xa0Tower\xa0-\xa0IoT",
         },
         "wifi_direct": {
             "Connection Method": "Not Set",
@@ -50,6 +51,7 @@ EXPECTATIONS: dict[str, dict[str, Any]] = {
             "C": 80,
         },
         "network": {
+            "Device Name": "EPSON7E2246",
             "Signal Strength": "Excellent",
             "SSID": "eLeCtRoN-Lan-SD",
         },
@@ -69,6 +71,7 @@ EXPECTATIONS: dict[str, dict[str, Any]] = {
             "C": 100,
         },
         "network": {
+            "Printer Name": "EPSON053D87",  # Note: "Printer Name" on some models
             "Signal Strength": "Excellent",
             "SSID": "CHAOS",
         },
@@ -86,6 +89,7 @@ EXPECTATIONS: dict[str, dict[str, Any]] = {
             "C": 64,
         },
         "network": {
+            "Device Name": "EPSON06274A",
             "Signal Strength": "Excellent",
             "SSID": "knappe-home",
         },
@@ -150,10 +154,6 @@ def test_each_fixture_parses_and_matches_expectations(fixture_name: str):
         if "network" in spec:
             network_data = data.get("network", {})
             network_spec = spec["network"]
-            # Normalize SSID for comparison (handle non-breaking spaces)
-            if "SSID" in network_data and "SSID" in network_spec:
-                normalized_ssid = network_data["SSID"].replace('\xa0', ' ')
-                network_data = {**network_data, "SSID": normalized_ssid}
             _assert_subset(network_data, network_spec, path="network")
 
         # For wifi_direct data, we assert a subset
