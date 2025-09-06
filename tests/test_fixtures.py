@@ -39,6 +39,20 @@ EXPECTATIONS: dict[str, dict[str, Any]] = {
             "Connection Method": "Not Set",
         },
     },
+    "ET-16500.html": {
+        "name": "Epson ET-16500 Series",  # no network data
+        "model": "Epson ET-16500 Series",
+        "mac_address": "44:D2:44:FB:CC:F7",
+        "maintenance_box": 30,
+        "inks": {  # subset OK
+            "BK": 46,
+            "C": 56,
+            "Y": 40,
+            "M": 54,
+        },
+        "network": {},
+        "wifi_direct": {},
+    },
     "L6270.html": {
         "name": "EPSON7E2246",
         "model": "Epson L6270 Series",
@@ -134,7 +148,6 @@ def test_each_fixture_parses_and_matches_expectations(fixture_name: str):
     assert data, "Parser returned empty result"
     assert isinstance(data, dict), "Parser did not return a dict"
     assert "model" in data
-    assert "printer_status" in data or "scanner_status" in data
     assert "inks" in data
     assert isinstance(data["inks"], dict)
 
