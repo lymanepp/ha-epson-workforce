@@ -63,7 +63,7 @@ class EpsonHTMLParser:
             "maintenance_box": maintenance,
             "network": network,
         }
-        if name := network.get("Device Name") or network.get("Printer Name"):
+        if name := network.get("Device Name") or network.get("Printer Name") or model:
             out["name"] = name
         if wifi_direct := self._parse_table_by_container_id("info-wfd"):
             out["wifi_direct"] = wifi_direct
