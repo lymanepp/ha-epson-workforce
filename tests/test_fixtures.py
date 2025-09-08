@@ -43,6 +43,7 @@ EXPECTATIONS: dict[str, dict[str, Any]] = {
     "ET-16500.html": {
         "name": "EPSONFBCCF7",
         "model": "Epson ET-16500 Series",
+        "printer_status": "Verfügbar",  # German for "Available"
         "mac_address": "44:D2:44:FB:CC:F7",
         "ip_address": "192.168.1.15",
         "maintenance_box": 30,
