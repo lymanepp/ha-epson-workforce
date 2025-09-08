@@ -10,6 +10,13 @@ from bs4.element import Tag
 
 MAX_STATUS_LENGTH = 40
 
+# --- value-pattern fallbacks (language-agnostic) ---
+RE_EPSON_DEVNAME = re.compile(r"\bEPSON[0-9A-F]{6}\b", re.IGNORECASE)
+RE_IPV4 = re.compile(
+    r"\b(?:(?:25[0-5]|2[0-4]\d|[01]?\d?\d)\.){3}" r"(?:25[0-5]|2[0-4]\d|[01]?\d?\d)\b"
+)
+RE_MAC = re.compile(r"\b([0-9A-F]{2}:){5}[0-9A-F]{2}\b", re.IGNORECASE)
+
 
 # ----------------------------
 # Lightweight HTML page parser
@@ -19,6 +26,7 @@ def _classes(node: Tag) -> list[str]:
 
 
 def _height_from_style(node: Tag) -> int | None:
+    """Extract an integer height out of inline style, e.g. 'height: 34px'."""
     style_val = node.get("style")
     if isinstance(style_val, str):
         style = style_val.lower()
@@ -26,7 +34,6 @@ def _height_from_style(node: Tag) -> int | None:
         style = " ".join(style_val).lower()
     else:
         return None
-
     m = re.search(r"height\s*:\s*(\d+)", style)
     return int(m.group(1)) if m else None
 
@@ -53,8 +60,11 @@ class EpsonHTMLParser:
         model = self._parse_model()
         statuses = self._parse_statuses()
         inks, maintenance = self._parse_inks_and_maintenance()
-        network = self._parse_table_by_container_id("info-network")
 
+        network = self._parse_table_by_container_id("info-network")
+        wifi_direct = self._parse_table_by_container_id("info-wfd")
+
+        # Base payload
         out: dict[str, Any] = {
             "source": self.source or model,
             "model": model,
@@ -63,16 +73,37 @@ class EpsonHTMLParser:
             "maintenance_box": maintenance,
             "network": network,
         }
-        if name := network.get("Device Name") or network.get("Printer Name") or model:
-            out["name"] = name
-        if wifi_direct := self._parse_table_by_container_id("info-wfd"):
+        if wifi_direct:
             out["wifi_direct"] = wifi_direct
-        if mac := network.get("MAC Address") or self._extract_mac_from_text():
+
+        # Name: prefer table fields, then pattern fallback, then model.
+        name = (
+            network.get("Device Name")
+            or network.get("Printer Name")
+            or self._extract_device_name()
+            or model
+        )
+        if name:
+            out["name"] = name
+
+        # MAC/IP: prefer table fields, fall back to text search
+        mac = (
+            network.get("MAC Address")
+            or network.get("MAC address")
+            or self._extract_mac_from_text()
+        )
+        if mac:
             out["mac_address"] = mac
+
+        ip = network.get("IP Address") or self._extract_ip_from_text()
+        if ip:
+            out["ip_address"] = ip
+
         return out
 
     # --- model / status ---
     def _parse_model(self) -> str | None:
+        # Title or header span, e.g. "ET-8500 Series" / "WF-7720 Series"
         t = self.soup.find("title")
         if isinstance(t, Tag) and t.text.strip():
             return f"Epson {t.text.strip()}"
@@ -84,12 +115,19 @@ class EpsonHTMLParser:
     def _parse_statuses(self) -> dict[str, str | None]:
         out: dict[str, str | None] = {}
 
-        fs = self.soup.find("fieldset", id="PRT_STATUS")
-        if isinstance(fs, Tag):
-            txt = fs.get_text(" ", strip=True)
+        # Printer status (modern pages)
+        fs_prt = self.soup.find("fieldset", id="PRT_STATUS")
+        if isinstance(fs_prt, Tag):
+            txt = fs_prt.get_text(" ", strip=True)
             out["printer_status"] = self._clean_status(txt)
 
-        # Fallback for printer status: .information span
+        # Scanner status (when present)
+        fs_scn = self.soup.find("fieldset", id="SCN_STATUS")
+        if isinstance(fs_scn, Tag):
+            txt = fs_scn.get_text(" ", strip=True)
+            out["scanner_status"] = self._clean_status(txt)
+
+        # Fallback for older layout (e.g., WF-3540): .information span -> "Available."
         if not out.get("printer_status"):
             info = self.soup.find("div", class_="information")
             if isinstance(info, Tag):
@@ -106,21 +144,25 @@ class EpsonHTMLParser:
         if not s:
             return None
         s = s.strip()
+        # Drop leading "Printer Status:" / "Scanner Status:" labels if present
         s = re.sub(
             r"^(?:printer|scanner)\s+status\s*[:\-]?\s*", "", s, flags=re.IGNORECASE
         )
+        # Trim a tiny trailing period for short phrases like "Available."
         if len(s) <= MAX_STATUS_LENGTH and s.endswith("."):
             s = s[:-1]
         return s or None
 
     # --- inks / maintenance ---
     def _parse_inks_and_maintenance(self) -> tuple[dict[str, int], int | None]:
+        """Parse tank heights and the maintenance/waste box level.
+
+        Heights are 0–50px for tanks; map to 0–100%.
+        """
         inks: dict[str, int] = {}
         maintenance: int | None = None
 
         for li in self.soup.select("li.tank"):
-            # if not isinstance(li, Tag):
-            #    continue
             # label
             label = None
             for d in li.find_all("div"):
@@ -143,7 +185,7 @@ class EpsonHTMLParser:
             height_px = self._li_bar_height(li)
             if height_px is None:
                 continue
-            pct = max(0, min(100, height_px * 2))
+            pct = max(0, min(100, height_px * 2))  # 50px -> 100%
 
             if is_maintenance:
                 maintenance = pct
@@ -163,6 +205,7 @@ class EpsonHTMLParser:
                 break
         if bar_div is None:
             return None
+
         # prefer <img class="color"> then any <img>
         img = bar_div.find("img", class_="color") or bar_div.find("img")
         if isinstance(img, Tag):
@@ -172,6 +215,7 @@ class EpsonHTMLParser:
             h2 = _height_from_style(img)
             if h2 is not None:
                 return h2
+
         # fallback: any descendant with inline height
         for desc in bar_div.descendants:
             if isinstance(desc, Tag):
@@ -202,8 +246,19 @@ class EpsonHTMLParser:
                     data[key] = val
         return data
 
-    # --- misc ---
+    # --- misc fallbacks (value-pattern based) ---
     def _extract_mac_from_text(self) -> str | None:
         txt = self.soup.get_text(" ", strip=True)
-        m = re.search(r"\b([0-9A-F]{2}:){5}[0-9A-F]{2}\b", txt, flags=re.IGNORECASE)
+        m = RE_MAC.search(txt)
         return m.group(0) if m else None
+
+    def _extract_ip_from_text(self) -> str | None:
+        txt = self.soup.get_text(" ", strip=True)
+        m = RE_IPV4.search(txt)
+        return m.group(0) if m else None
+
+    def _extract_device_name(self) -> str | None:
+        # e.g. EPSON0C9E89 / EPSON06274A / EPSON053D87
+        txt = self.soup.get_text(" ", strip=True)
+        m = RE_EPSON_DEVNAME.search(txt)
+        return m.group(0).upper() if m else None

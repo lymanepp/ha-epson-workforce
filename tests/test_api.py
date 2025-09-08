@@ -243,7 +243,7 @@ class TestDiagnosticSensors:
         api._data = {
             "inks": {"BK": 50, "M": 30},
             "printer_status": "Available",
-            "maintenance_box": 20
+            "maintenance_box": 20,
             # No network data
         }
 

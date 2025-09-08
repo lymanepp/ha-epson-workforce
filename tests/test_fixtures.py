@@ -22,6 +22,7 @@ EXPECTATIONS: dict[str, dict[str, Any]] = {
         "model": "Epson ET-8500 Series",
         "printer_status": "Available",
         "mac_address": "DC:CD:2F:0C:9E:89",
+        "ip_address": "10.0.30.10",
         "maintenance_box": 36,
         "inks": {  # subset OK
             "BK": 26,
@@ -40,14 +41,15 @@ EXPECTATIONS: dict[str, dict[str, Any]] = {
         },
     },
     "ET-16500.html": {
-        "name": "Epson ET-16500 Series",  # no network data
+        "name": "EPSONFBCCF7",
         "model": "Epson ET-16500 Series",
         "mac_address": "44:D2:44:FB:CC:F7",
+        "ip_address": "192.168.1.15",
         "maintenance_box": 30,
         "inks": {  # subset OK
-            "BK": 46,
+            "BK": 44,
             "C": 56,
-            "Y": 40,
+            "Y": 38,
             "M": 54,
         },
         "network": {},
@@ -58,6 +60,7 @@ EXPECTATIONS: dict[str, dict[str, Any]] = {
         "model": "Epson L6270 Series",
         "printer_status": "Available",
         "mac_address": "68:55:D4:7E:22:46",
+        "ip_address": "192.168.0.75",
         "maintenance_box": 90,
         "inks": {
             "BK": 68,
@@ -78,6 +81,7 @@ EXPECTATIONS: dict[str, dict[str, Any]] = {
         "model": "Epson WF-3540 Series",
         "printer_status": "Available",
         "mac_address": "B0:E8:92:05:3D:87",
+        "ip_address": "10.0.4.121",
         "maintenance_box": 42,
         "inks": {
             "BK": 26,
@@ -96,6 +100,7 @@ EXPECTATIONS: dict[str, dict[str, Any]] = {
         "model": "Epson WF-7720 Series",
         "printer_status": "Available",
         "mac_address": "38:1A:52:06:27:4A",
+        "ip_address": "192.168.2.121",
         "maintenance_box": 88,
         "inks": {
             "BK": 96,
