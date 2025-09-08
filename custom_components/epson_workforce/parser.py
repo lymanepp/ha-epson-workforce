@@ -13,7 +13,8 @@ MAX_STATUS_LENGTH = 40
 # --- value-pattern fallbacks (language-agnostic) ---
 RE_EPSON_DEVNAME = re.compile(r"\bEPSON[0-9A-F]{6}\b", re.IGNORECASE)
 RE_IPV4 = re.compile(
-    r"\b(?:(?:25[0-5]|2[0-4]\d|[01]?\d?\d)\.){3}" r"(?:25[0-5]|2[0-4]\d|[01]?\d?\d)\b"
+    r"\b(?:(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)\.){3}"
+    r"(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)\b"
 )
 RE_MAC = re.compile(r"\b([0-9A-F]{2}:){5}[0-9A-F]{2}\b", re.IGNORECASE)
 
