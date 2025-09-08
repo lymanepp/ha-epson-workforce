@@ -22,6 +22,7 @@ EXPECTATIONS: dict[str, dict[str, Any]] = {
         "model": "Epson ET-8500 Series",
         "printer_status": "Available",
         "mac_address": "DC:CD:2F:0C:9E:89",
+        "ip_address": "10.0.30.10",
         "maintenance_box": 36,
         "inks": {  # subset OK
             "BK": 26,
@@ -39,11 +40,28 @@ EXPECTATIONS: dict[str, dict[str, Any]] = {
             "Connection Method": "Not Set",
         },
     },
+    "ET-16500.html": {
+        "name": "EPSONFBCCF7",
+        "model": "Epson ET-16500 Series",
+        "printer_status": "Verfügbar",  # German for "Available"
+        "mac_address": "44:D2:44:FB:CC:F7",
+        "ip_address": "192.168.1.15",
+        "maintenance_box": 30,
+        "inks": {  # subset OK
+            "BK": 44,
+            "C": 56,
+            "Y": 38,
+            "M": 54,
+        },
+        "network": {},
+        "wifi_direct": {},
+    },
     "L6270.html": {
         "name": "EPSON7E2246",
         "model": "Epson L6270 Series",
         "printer_status": "Available",
         "mac_address": "68:55:D4:7E:22:46",
+        "ip_address": "192.168.0.75",
         "maintenance_box": 90,
         "inks": {
             "BK": 68,
@@ -64,6 +82,7 @@ EXPECTATIONS: dict[str, dict[str, Any]] = {
         "model": "Epson WF-3540 Series",
         "printer_status": "Available",
         "mac_address": "B0:E8:92:05:3D:87",
+        "ip_address": "10.0.4.121",
         "maintenance_box": 42,
         "inks": {
             "BK": 26,
@@ -82,6 +101,7 @@ EXPECTATIONS: dict[str, dict[str, Any]] = {
         "model": "Epson WF-7720 Series",
         "printer_status": "Available",
         "mac_address": "38:1A:52:06:27:4A",
+        "ip_address": "192.168.2.121",
         "maintenance_box": 88,
         "inks": {
             "BK": 96,
@@ -134,7 +154,6 @@ def test_each_fixture_parses_and_matches_expectations(fixture_name: str):
     assert data, "Parser returned empty result"
     assert isinstance(data, dict), "Parser did not return a dict"
     assert "model" in data
-    assert "printer_status" in data or "scanner_status" in data
     assert "inks" in data
     assert isinstance(data["inks"], dict)
 
