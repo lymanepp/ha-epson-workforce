@@ -50,6 +50,15 @@ def _clean_value(t: str) -> str:
     return t.replace("\xa0", " ").strip()
 
 
+def _quartile_from_classes(classes: list[str]) -> int | None:
+    for c in classes or []:
+        m = re.match(r"tank_(\d+)(?:st|nd|rd|th)?$", c.strip().lower())
+        if m:
+            n = int(m.group(1))
+            return min(100, max(0, n * 25))
+    return None
+
+
 class EpsonHTMLParser:
     """Minimal, robust parser for Epson status pages across multiple models/skins."""
 
@@ -183,10 +192,10 @@ class EpsonHTMLParser:
             )
 
             # bar height
-            height_px = self._li_bar_height(li)
-            if height_px is None:
+            height_pct = self._pct_from_bar_height(li)
+            if height_pct is None:
                 continue
-            pct = max(0, min(100, height_px * 2))  # 50px -> 100%
+            pct = max(0, min(100, height_pct))
 
             if is_maintenance:
                 maintenance = pct
@@ -195,13 +204,13 @@ class EpsonHTMLParser:
 
         return inks, maintenance
 
-    def _li_bar_height(self, li: Tag) -> int | None:
+    def _pct_from_bar_height(self, li: Tag) -> int | None:
         # find inner div.tank (the visual container)
         bar_div = None
         for d in li.find_all("div"):
             if not isinstance(d, Tag):
                 continue
-            if any(c.lower() == "tank" for c in _classes(d)):
+            if any(c.lower().startswith("tank") for c in _classes(d)):
                 bar_div = d
                 break
         if bar_div is None:
@@ -212,17 +221,27 @@ class EpsonHTMLParser:
         if isinstance(img, Tag):
             h = img.get("height")
             if isinstance(h, str) and h.isdigit():
-                return int(h)
+                return int(h) * 2  # convert px to pct (px*2)
             h2 = _height_from_style(img)
             if h2 is not None:
-                return h2
+                return h2 * 2  # convert px to pct (px*2)
 
         # fallback: any descendant with inline height
         for desc in bar_div.descendants:
             if isinstance(desc, Tag):
                 h3 = _height_from_style(desc)
                 if h3 is not None:
-                    return h3
+                    return h3 * 2  # convert px to pct (px*2)
+
+        # L3250-style: CSS class encodes quartile like tank_3rd (no inline height)
+        q = _quartile_from_classes(_classes(bar_div))
+        if q is not None:
+            return int(q)
+        for child in bar_div.find_all(True, recursive=False):
+            q = _quartile_from_classes(_classes(child))
+            if q is not None:
+                return int(q)
+
         return None
 
     # --- key/value tables ---

@@ -56,6 +56,27 @@ EXPECTATIONS: dict[str, dict[str, Any]] = {
         "network": {},
         "wifi_direct": {},
     },
+    "L3250.html": {
+        "name": "EPSON51091D",
+        "model": "Epson L3250 Series",
+        "printer_status": "Available",
+        "mac_address": "64:C6:D2:51:09:1D",
+        "ip_address": "172.16.36.14",
+        "maintenance_box": None,
+        "inks": {
+            "BK": 75,  # quartile 3 = 75%
+            "M": 75,  # quartile 3 = 75%
+            "Y": 75,  # quartile 3 = 75%
+            "C": 75,  # quartile 3 = 75%
+        },
+        "network": {
+            "Signal Strength": "Excellent",
+            "SSID": "IOT AS",
+        },
+        "wifi_direct": {
+            "Connection Method": "Not Set",
+        },
+    },
     "L6270.html": {
         "name": "EPSON7E2246",
         "model": "Epson L6270 Series",
