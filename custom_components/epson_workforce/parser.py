@@ -204,7 +204,7 @@ class EpsonHTMLParser:
 
         return inks, maintenance
 
-    def _pct_from_bar_height(self, li: Tag) -> int | None:
+    def _pct_from_bar_height(self, li: Tag) -> int | None:  # noqa: PLR0911
         # find inner div.tank (the visual container)
         bar_div = None
         for d in li.find_all("div"):
