@@ -39,6 +39,23 @@ def _height_from_style(node: Tag) -> int | None:
     return int(m.group(1)) if m else None
 
 
+def _percent_from_linear_gradient(style_val: str | list[str] | None) -> int | None:
+    """Parse 'linear-gradient(...)' style and return fill percent (0-100).
+    Example: linear-gradient(... 0%, 34%, 34%, 100%) -> 34
+    """
+    if not style_val:
+        return None
+    style = " ".join(style_val) if isinstance(style_val, list) else str(style_val)
+    if "linear-gradient" not in style:
+        return None
+    # Capture percent stops in order (allow decimals), use the 2nd stop.
+    nums = [float(n) for n in re.findall(r"(\d{1,3}(?:\.\d+)?)\s*%", style)]
+    if len(nums) < 2:
+        return None
+    val = int(round(nums[1]))
+    return max(0, min(100, val))
+
+
 def _clean_key(t: str) -> str:
     t = t.replace("\xa0:", "").replace(" :", ":").strip()
     if t.endswith(":"):
@@ -185,8 +202,12 @@ class EpsonHTMLParser:
             # bar height
             height_px = self._li_bar_height(li)
             if height_px is None:
-                continue
-            pct = max(0, min(100, height_px * 2))  # 50px -> 100%
+                # XP-2200 series: level encoded via linear-gradient on inner div.tank
+                pct = self._li_gradient_percent(li)
+                if pct is None:
+                    continue
+            else:
+                pct = max(0, min(100, height_px * 2))  # 50px -> 100%
 
             if is_maintenance:
                 maintenance = pct
@@ -224,6 +245,20 @@ class EpsonHTMLParser:
                 if h3 is not None:
                     return h3
         return None
+
+    def _li_gradient_percent(self, li: Tag) -> int | None:
+        """Return 0-100 ink percentage from a 'background: linear-gradient(...)' on inner div.tank."""
+        # find inner div.tank (the visual container)
+        bar_div = None
+        for d in li.find_all("div"):
+            if not isinstance(d, Tag):
+                continue
+            if any(c.lower() == "tank" for c in _classes(d)):
+                bar_div = d
+                break
+        if bar_div is None:
+            return None
+        return _percent_from_linear_gradient(bar_div.get("style"))
 
     # --- key/value tables ---
     def _parse_table_by_container_id(self, container_id: str) -> dict[str, str]:
