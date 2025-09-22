@@ -50,7 +50,7 @@ def _percent_from_linear_gradient(style_val: str | list[str] | None) -> int | No
         return None
     # Capture percent stops in order (allow decimals), use the 2nd stop.
     nums = [float(n) for n in re.findall(r"(\d{1,3}(?:\.\d+)?)\s*%", style)]
-    if len(nums) < 2:
+    if len(nums) < 2:  # noqa: PLR2004
         return None
     val = int(round(nums[1]))
     return max(0, min(100, val))
@@ -247,7 +247,10 @@ class EpsonHTMLParser:
         return None
 
     def _li_gradient_percent(self, li: Tag) -> int | None:
-        """Return 0-100 ink percentage from a 'background: linear-gradient(...)' on inner div.tank."""
+        """
+        Return 0-100 ink percentage from a 'background: linear-gradient(...)' on inner
+        div.tank.
+        """
         # find inner div.tank (the visual container)
         bar_div = None
         for d in li.find_all("div"):
