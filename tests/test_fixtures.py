@@ -117,6 +117,27 @@ EXPECTATIONS: dict[str, dict[str, Any]] = {
             "Connection Method": "Not Set",
         },
     },
+    "XP-2205.html": {
+        "name": "EPSON516832",
+        "model": "Epson XP-2200 Series",
+        "printer_status": "Available",
+        "mac_address": "F8:25:51:51:68:32",
+        "ip_address": "192.168.1.122",
+        # "maintenance_box": 88,
+        "inks": {
+            "BK": 34,
+            "M": 54,
+            "Y": 60,
+            "C": 63,
+        },
+        "network": {
+            "Signal Strength": "Good",
+            "SSID": "FRITZBOX7590",
+        },
+        "wifi_direct": {
+            "Connection Method": "Not Set",
+        },
+    },
 }
 
 

@@ -26,19 +26,6 @@ def _classes(node: Tag) -> list[str]:
     return list(node.get("class") or [])
 
 
-def _height_from_style(node: Tag) -> int | None:
-    """Extract an integer height out of inline style, e.g. 'height: 34px'."""
-    style_val = node.get("style")
-    if isinstance(style_val, str):
-        style = style_val.lower()
-    elif isinstance(style_val, list):
-        style = " ".join(style_val).lower()
-    else:
-        return None
-    m = re.search(r"height\s*:\s*(\d+)", style)
-    return int(m.group(1)) if m else None
-
-
 def _clean_key(t: str) -> str:
     t = t.replace("\xa0:", "").replace(" :", ":").strip()
     if t.endswith(":"):
@@ -156,10 +143,7 @@ class EpsonHTMLParser:
 
     # --- inks / maintenance ---
     def _parse_inks_and_maintenance(self) -> tuple[dict[str, int], int | None]:
-        """Parse tank heights and the maintenance/waste box level.
-
-        Heights are 0–50px for tanks; map to 0–100%.
-        """
+        """Parse tank levels and the maintenance/waste box level in percent (0-100)."""
         inks: dict[str, int] = {}
         maintenance: int | None = None
 
@@ -182,11 +166,9 @@ class EpsonHTMLParser:
                 if isinstance(d, Tag)
             )
 
-            # bar height
-            height_px = self._li_bar_height(li)
-            if height_px is None:
+            pct = self._li_level_percent(li)
+            if pct is None:
                 continue
-            pct = max(0, min(100, height_px * 2))  # 50px -> 100%
 
             if is_maintenance:
                 maintenance = pct
@@ -195,7 +177,9 @@ class EpsonHTMLParser:
 
         return inks, maintenance
 
-    def _li_bar_height(self, li: Tag) -> int | None:
+    def _li_level_percent(self, li: Tag) -> int | None:
+        """Return 0-100% ink level from the bar container."""
+
         # find inner div.tank (the visual container)
         bar_div = None
         for d in li.find_all("div"):
@@ -207,22 +191,34 @@ class EpsonHTMLParser:
         if bar_div is None:
             return None
 
-        # prefer <img class="color"> then any <img>
-        img = bar_div.find("img", class_="color") or bar_div.find("img")
+        # get level from image height
+        img = bar_div.find("img")
         if isinstance(img, Tag):
             h = img.get("height")
             if isinstance(h, str) and h.isdigit():
-                return int(h)
-            h2 = _height_from_style(img)
-            if h2 is not None:
-                return h2
+                px = int(h)
+                return max(0, min(100, px * 2))
 
-        # fallback: any descendant with inline height
-        for desc in bar_div.descendants:
-            if isinstance(desc, Tag):
-                h3 = _height_from_style(desc)
-                if h3 is not None:
-                    return h3
+        style_val = bar_div.get("style")
+        if not style_val:
+            return None
+
+        style = " ".join(style_val) if isinstance(style_val, list) else str(style_val)
+        s = style.lower()
+
+        # get level from height in style
+        m = re.search(r"height\s*:\s*(\d+)", s)
+        if m:
+            px = int(m.group(1))
+            return max(0, min(100, px * 2))  # 50px → 100%
+
+        # get level from linear gradient in style
+        if "linear-gradient" in s:
+            nums = [float(n) for n in re.findall(r"(\d{1,3}(?:\.\d+)?)\s*%", s)]
+            if len(nums) >= 2:  # noqa: PLR2004
+                val = int(round(nums[1]))
+                return max(0, min(100, val))
+
         return None
 
     # --- key/value tables ---

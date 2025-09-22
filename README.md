@@ -24,7 +24,7 @@
 * ET-2650, ET-2750, ET-4750, ET-5150 (51x0), ET-77x0, ET-8500, L6270
 
 ### Expression Series
-* XP-860, XP-2100, XP-2105, XP-2150
+* XP-860, XP-2100, XP-2105, XP-2150, XP-2205
 
 ### Requirements
 * Printer must be connected to your network
