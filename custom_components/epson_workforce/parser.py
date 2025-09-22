@@ -175,7 +175,7 @@ class EpsonHTMLParser:
     def _parse_inks_and_maintenance(self) -> tuple[dict[str, int], int | None]:
         """Parse tank heights and the maintenance/waste box level.
 
-        Heights are 0–50px for tanks; map to 0–100%.
+        Heights are 0-50px for tanks; map to 0-100%.
         """
         inks: dict[str, int] = {}
         maintenance: int | None = None
@@ -200,15 +200,12 @@ class EpsonHTMLParser:
             )
 
             # bar height
-            height_px = self._li_bar_height(li)
-            if height_px is None:
+            pct = self._li_bar_percent(li)
+            if pct is None:
                 # XP-2200 series: level encoded via linear-gradient on inner div.tank
                 pct = self._li_gradient_percent(li)
                 if pct is None:
                     continue
-            else:
-                pct = max(0, min(100, height_px * 2))  # 50px -> 100%
-
             if is_maintenance:
                 maintenance = pct
             elif label:
@@ -216,7 +213,7 @@ class EpsonHTMLParser:
 
         return inks, maintenance
 
-    def _li_bar_height(self, li: Tag) -> int | None:
+    def _li_bar_percent(self, li: Tag) -> int | None:
         # find inner div.tank (the visual container)
         bar_div = None
         for d in li.find_all("div"):
@@ -233,17 +230,11 @@ class EpsonHTMLParser:
         if isinstance(img, Tag):
             h = img.get("height")
             if isinstance(h, str) and h.isdigit():
-                return int(h)
+                return int(h) * 2
             h2 = _height_from_style(img)
             if h2 is not None:
-                return h2
+                return int(h2) * 2
 
-        # fallback: any descendant with inline height
-        for desc in bar_div.descendants:
-            if isinstance(desc, Tag):
-                h3 = _height_from_style(desc)
-                if h3 is not None:
-                    return h3
         return None
 
     def _li_gradient_percent(self, li: Tag) -> int | None:
