@@ -123,7 +123,6 @@ EXPECTATIONS: dict[str, dict[str, Any]] = {
         "printer_status": "Available",
         "mac_address": "F8:25:51:51:68:32",
         "ip_address": "192.168.1.122",
-        # "maintenance_box": 88,
         "inks": {
             "BK": 34,
             "M": 54,
