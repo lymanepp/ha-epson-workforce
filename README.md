@@ -68,9 +68,10 @@ The integration automatically detects and creates sensors for:
 > Only sensors available on your specific printer model will be created. The integration queries your printer and only adds sensors for cartridges that are detected.
 
 Example sensor names:
-- `sensor.ink_level_black_192_168_1_100`
-- `sensor.ink_level_cyan_192_168_1_100`
-- `sensor.printer_status_192_168_1_100`
+- `sensor.epson123456_ink_level_black`
+- `sensor.epson123456_printer_status`
+- `sensor.epson123456_cleaning_level`
+- `sensor.epson123456_wifi_network`
 
 ## Troubleshooting
 
