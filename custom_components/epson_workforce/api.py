@@ -10,10 +10,11 @@ from .parser import EpsonHTMLParser
 
 
 class EpsonWorkForceAPI:
-    def __init__(self, ip: str, path: str):
+    def __init__(self, ip: str, path: str, timeout: float = 5.0):
         self._resource = "http://" + ip + path
         self._ip = ip  # Store IP address for diagnostic sensor
         self.available: bool = True
+        self._timeout = timeout
 
         # Internal
         self._parser: EpsonHTMLParser | None = None
@@ -49,8 +50,13 @@ class EpsonWorkForceAPI:
         """
         try:
             context = ssl._create_unverified_context()
-            with urllib.request.urlopen(self._resource, context=context) as response:
+            with urllib.request.urlopen(
+                self._resource,
+                context=context,
+                timeout=self._timeout
+            ) as response:
                 data_bytes = response.read()
+
             html_text = data_bytes.decode("utf-8", errors="ignore")
             self._parser = EpsonHTMLParser(html_text, source=self._resource)
             self.available = True
