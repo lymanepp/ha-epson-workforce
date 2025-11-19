@@ -51,9 +51,7 @@ class EpsonWorkForceAPI:
         try:
             context = ssl._create_unverified_context()
             with urllib.request.urlopen(
-                self._resource,
-                context=context,
-                timeout=self._timeout
+                self._resource, context=context, timeout=self._timeout
             ) as response:
                 data_bytes = response.read()
 
