@@ -5,6 +5,7 @@ from __future__ import annotations
 import ssl
 from typing import Any
 import urllib.request
+import re
 
 from .parser import EpsonHTMLParser
 
@@ -19,6 +20,7 @@ class EpsonWorkForceAPI:
         # Internal
         self._parser: EpsonHTMLParser | None = None
         self._data: dict[str, Any] | None = None  # parsed dict cache
+        self._usage_data: dict[str, Any] = {}
 
         # Defaults
         self._model: str | None = None
@@ -59,15 +61,55 @@ class EpsonWorkForceAPI:
             self._parser = EpsonHTMLParser(html_text, source=self._resource)
             self.available = True
             self._data = None  # invalidate cache
+            
+            # Fetch additional usage stats
+            self._fetch_usage_data(context)
+            
         except Exception:
             self.available = False
             self._parser = None
             self._data = None
 
+    def _fetch_usage_data(self, context: ssl.SSLContext) -> None:
+        """Fetch data from additional usage pages."""
+        possible_paths = [
+            "/PRESENTATION/ADVANCED/COMMON/TOP",
+            "/PRESENTATION/ADVANCED/INFO_MENTINFO/TOP"
+        ]
+        
+        patterns = {
+            "total_pages": r"Total Number of Pages.*?class=\"preserve-white-space\">(.*?)</div>",
+            "bw_pages": r"Total Number of B&W Pages.*?class=\"preserve-white-space\">(.*?)</div>",
+            "color_pages": r"Total Number of Color Pages.*?class=\"preserve-white-space\">(.*?)</div>",
+            "bw_scans": r"B&W Scan.*?class=\"preserve-white-space\">(.*?)</div>",
+            "color_scans": r"Color Scan.*?class=\"preserve-white-space\">(.*?)</div>",
+            "first_print_date": r"First Printing Date.*?class=\"preserve-white-space\">(.*?)</div>",
+        }
+
+        for path in possible_paths:
+            try:
+                url = f"http://{self._ip}{path}"
+                with urllib.request.urlopen(url, context=context, timeout=self._timeout) as response:
+                    html = response.read().decode("utf-8", errors="ignore")
+                    found_any = False
+                    for key, pattern in patterns.items():
+                        match = re.search(pattern, html, re.DOTALL | re.IGNORECASE)
+                        if match:
+                            self._usage_data[key] = match.group(1).strip()
+                            found_any = True
+                    if found_any:
+                        break
+            except Exception:
+                continue
+
     def get_sensor_value(self, sensor: str) -> int | str | None:
         """Retrieves the value of a specified sensor from the parsed printer data."""
         self._ensure_parsed()
         data = self._data or {}
+
+        # Handle usage sensors
+        if sensor in self._usage_data:
+            return self._usage_data[sensor]
 
         # Handle special sensors
         if sensor == "printer_status":
