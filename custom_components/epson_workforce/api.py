@@ -78,12 +78,12 @@ class EpsonWorkForceAPI:
         ]
         
         patterns = {
-            "total_pages": r"Total Number of Pages.*?class=\"preserve-white-space\">(.*?)</div>",
-            "bw_pages": r"Total Number of B&W Pages.*?class=\"preserve-white-space\">(.*?)</div>",
-            "color_pages": r"Total Number of Color Pages.*?class=\"preserve-white-space\">(.*?)</div>",
-            "bw_scans": r"B&W Scan.*?class=\"preserve-white-space\">(.*?)</div>",
-            "color_scans": r"Color Scan.*?class=\"preserve-white-space\">(.*?)</div>",
-            "first_print_date": r"First Printing Date.*?class=\"preserve-white-space\">(.*?)</div>",
+            "total_pages": r"Total Number of Pages.*?>(\d+)</div>",
+            "bw_pages": r"Total Number of B(?:&amp;|W) Pages.*?>(\d+)</div>",
+            "color_pages": r"Total Number of Color Pages.*?>(\d+)</div>",
+            "bw_scans": r"B(?:&amp;|W) Scan.*?>(\d+)</div>",
+            "color_scans": r"Color Scan.*?>(\d+)</div>",
+            "first_print_date": r"First Printing Date.*?>([\d-]+)</div>",
         }
 
         for path in possible_paths:
@@ -91,13 +91,16 @@ class EpsonWorkForceAPI:
                 url = f"http://{self._ip}{path}"
                 with urllib.request.urlopen(url, context=context, timeout=self._timeout) as response:
                     html = response.read().decode("utf-8", errors="ignore")
-                    found_any = False
+                    
+                    # Debug: logging can be added here if needed
+                    found_on_this_page = False
                     for key, pattern in patterns.items():
                         match = re.search(pattern, html, re.DOTALL | re.IGNORECASE)
                         if match:
                             self._usage_data[key] = match.group(1).strip()
-                            found_any = True
-                    if found_any:
+                            found_on_this_page = True
+                    
+                    if found_on_this_page:
                         break
             except Exception:
                 continue
