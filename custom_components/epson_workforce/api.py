@@ -79,9 +79,9 @@ class EpsonWorkForceAPI:
         
         patterns = {
             "total_pages": r"Total Number of Pages.*?>(\d+)</div>",
-            "bw_pages": r"Total Number of B(?:&amp;|W) Pages.*?>(\d+)</div>",
-            "color_pages": r"Total Number of Color Pages.*?>(\d+)</div>",
-            "bw_scans": r"B(?:&amp;|W) Scan.*?>(\d+)</div>",
+            "bw_pages": r"B.*?W.*?Pages.*?>(\d+)</div>",
+            "color_pages": r"Color Pages.*?>(\d+)</div>",
+            "bw_scans": r"B.*?W.*?Scan.*?>(\d+)</div>",
             "color_scans": r"Color Scan.*?>(\d+)</div>",
             "first_print_date": r"First Printing Date.*?>([\d-]+)</div>",
         }
