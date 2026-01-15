@@ -109,6 +109,36 @@ SENSOR_TYPES: tuple[SensorEntityDescription, ...] = (
         icon="mdi:connection",
         entity_category=EntityCategory.DIAGNOSTIC,
     ),
+    SensorEntityDescription(  # type: ignore[call-arg]
+        key="total_pages",
+        name="Total Pages",
+        icon="mdi:counter",
+    ),
+    SensorEntityDescription(  # type: ignore[call-arg]
+        key="bw_pages",
+        name="B&W Pages",
+        icon="mdi:printer-3d-nozzle",
+    ),
+    SensorEntityDescription(  # type: ignore[call-arg]
+        key="color_pages",
+        name="Color Pages",
+        icon="mdi:palette",
+    ),
+    SensorEntityDescription(  # type: ignore[call-arg]
+        key="bw_scans",
+        name="B&W Scans",
+        icon="mdi:scanner",
+    ),
+    SensorEntityDescription(  # type: ignore[call-arg]
+        key="color_scans",
+        name="Color Scans",
+        icon="mdi:scanner-color",
+    ),
+    SensorEntityDescription(  # type: ignore[call-arg]
+        key="first_print_date",
+        name="First Printing Date",
+        icon="mdi:calendar-import",
+    ),
 )
 
 SCAN_INTERVAL = timedelta(seconds=60)
