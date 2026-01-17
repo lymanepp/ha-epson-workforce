@@ -72,6 +72,8 @@ class EpsonWorkForceAPI:
         # Handle special sensors
         if sensor == "printer_status":
             return data.get("printer_status") or "Unknown"
+        if sensor == "scanner_status":
+            return data.get("scanner_status") or "Unknown"
         if sensor == "clean":
             return data.get("maintenance_box")
         if sensor == "ip_address":

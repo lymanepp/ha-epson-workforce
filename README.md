@@ -18,7 +18,7 @@
 #### This integration works with the following Epson printer series
 
 ### WorkForce Series
-* WF2630, WF2660, WF3540, WF3620, WF3640, WF4820, WF7720
+* WF2630, WF2660, WF3540, WF3620, WF3640, WF4820, WF7720, WF7840
 
 ### EcoTank Series
 * ET-2650, ET-2750, ET-4750, ET-4800, ET-5150 (51x0), ET-77x0, ET-8500, L6270
