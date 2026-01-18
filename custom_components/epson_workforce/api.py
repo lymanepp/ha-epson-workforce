@@ -69,30 +69,35 @@ class EpsonWorkForceAPI:
         self._ensure_parsed()
         data = self._data or {}
 
+        result: int | str | None = None
+
         # Handle special sensors
         if sensor == "printer_status":
-            return data.get("printer_status") or "Unknown"
-        if sensor == "scanner_status":
-            return data.get("scanner_status") or "Unknown"
-        if sensor == "clean":
-            return data.get("maintenance_box")
-        if sensor == "ip_address":
-            return self._ip
+            result = data.get("printer_status") or "Unknown"
+        elif sensor == "scanner_status":
+            result = data.get("scanner_status") or "Unknown"
+        elif sensor == "clean":
+            result = data.get("maintenance_box")
+        elif sensor == "ip_address":
+            result = self._ip
 
         # Network diagnostics
-        if sensor in ("signal_strength", "ssid"):
+        elif sensor in ("signal_strength", "ssid"):
             network = data.get("network", {})
             network_key = "Signal Strength" if sensor == "signal_strength" else "SSID"
-            return network.get(network_key) or "Unknown"
+            result = network.get(network_key) or "Unknown"
 
         # WiFi Direct diagnostics
-        if sensor == "wifi_direct_connection_method":
+        elif sensor == "wifi_direct_connection_method":
             wifi_direct = data.get("wifi_direct", {})
-            return wifi_direct.get("Connection Method") or "Unknown"
+            result = wifi_direct.get("Connection Method") or "Unknown"
 
         # Default to ink sensors
-        inks: dict[str, int] = data.get("inks") or {}
-        return inks.get(sensor)
+        else:
+            inks: dict[str, int] = data.get("inks") or {}
+            result = inks.get(sensor)
+
+        return result
 
     def _ensure_parsed(self) -> None:
         if self._data is not None:
