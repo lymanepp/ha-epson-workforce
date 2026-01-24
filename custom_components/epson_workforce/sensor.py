@@ -86,6 +86,12 @@ SENSOR_TYPES: tuple[SensorEntityDescription, ...] = (
         entity_category=EntityCategory.DIAGNOSTIC,
     ),
     SensorEntityDescription(  # type: ignore[call-arg]
+        key="scanner_status",
+        name="Scanner Status",
+        icon="mdi:scanner",
+        entity_category=EntityCategory.DIAGNOSTIC,
+    ),
+    SensorEntityDescription(  # type: ignore[call-arg]
         key="ip_address",
         name="IP Address",
         icon="mdi:ip-network",
