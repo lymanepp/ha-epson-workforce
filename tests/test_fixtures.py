@@ -117,6 +117,28 @@ EXPECTATIONS: dict[str, dict[str, Any]] = {
             "Connection Method": "Not Set",
         },
     },
+    "WF-7840.html": {
+        "name": "EPSON4AADB5",
+        "model": "Epson WF-7840 Series",
+        "printer_status": "Available",
+        "scanner_status": "Available",
+        "mac_address": "00:00:00:00:00:00",
+        "ip_address": "192.168.0.1",
+        "maintenance_box": 70,
+        "inks": {
+            "BK": 12,
+            "M": 52,
+            "Y": 48,
+            "C": 66,
+        },
+        "network": {
+            "Signal Strength": "Excellent",
+            "SSID": "XXXX",
+        },
+        "wifi_direct": {
+            "Connection Method": "Not Set",
+        },
+    },
     "XP-2205.html": {
         "name": "EPSON516832",
         "model": "Epson XP-2200 Series",
