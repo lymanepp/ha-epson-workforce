@@ -115,7 +115,6 @@ ignore = [
 
 [tool.ruff.lint.isort]
 force-sort-within-sections = true
-known-first-party = ["pynws"]
 combine-as-imports = true
 split-on-trailing-comma = false
 
