@@ -18,13 +18,13 @@
 
 **Epson printer series likely to work:**
 
-* WorkForce: WF-26xx, WF-27xx, WF-35xx, WF-36xx, WF-48xx, WF-77xx, WF-78xx
+* WorkForce: WF-26xx, WF-27xx, WF-28xx, WF-35xx, WF-36xx, WF-48xx, WF-77xx, WF-78xx
 * EcoTank: ET-26xx, ET-27xx, ET-47xx, ET-48xx, ET-49xx, ET-51xx, ET-77xx, ET-85xx
 * Expression: XP-8xx, XP-21xx, XP-22xx
 
 **Confirmed working:**
 
-* WorkForce: WF-2630, WF-2660, WF-2760, WF-3540, WF-3620, WF-3640, WF-4820, WF-7720, WF-7830, WF-7840
+* WorkForce: WF-2630, WF-2660, WF-2760, WF-2835, WF-3540, WF-3620, WF-3640, WF-4820, WF-7720, WF-7830, WF-7840
 * EcoTank: ET-2650, ET-2750, ET-4750, ET-4800, ET-4950, ET-5150, ET-77x0, ET-8500, L6270
 * Expression: XP-860, XP-2100, XP-2105, XP-2150, XP-2205
 
