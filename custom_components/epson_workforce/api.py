@@ -5,6 +5,7 @@ from __future__ import annotations
 import ssl
 from typing import Any
 import urllib.request
+import re
 
 from .parser import EpsonHTMLParser
 
@@ -19,6 +20,7 @@ class EpsonWorkForceAPI:
         # Internal
         self._parser: EpsonHTMLParser | None = None
         self._data: dict[str, Any] | None = None  # parsed dict cache
+        self._usage_data: dict[str, Any] = {}
 
         # Defaults
         self._model: str | None = None
@@ -59,10 +61,49 @@ class EpsonWorkForceAPI:
             self._parser = EpsonHTMLParser(html_text, source=self._resource)
             self.available = True
             self._data = None  # invalidate cache
+            
+            # Fetch additional usage stats
+            self._fetch_usage_data(context)
+            
         except Exception:
             self.available = False
             self._parser = None
             self._data = None
+
+    def _fetch_usage_data(self, context: ssl.SSLContext) -> None:
+        """Fetch data from additional usage pages."""
+        possible_paths = [
+            "/PRESENTATION/ADVANCED/COMMON/TOP",
+            "/PRESENTATION/ADVANCED/INFO_MENTINFO/TOP"
+        ]
+        
+        patterns = {
+            "total_pages": r"Total Number of Pages.*?>(\d+)</div>",
+            "bw_pages": r"B.*?W.*?Pages.*?>(\d+)</div>",
+            "color_pages": r"Color Pages.*?>(\d+)</div>",
+            "bw_scans": r"B.*?W.*?Scan.*?>(\d+)</div>",
+            "color_scans": r"Color Scan.*?>(\d+)</div>",
+            "first_print_date": r"First Printing Date.*?>([\d-]+)</div>",
+        }
+
+        for path in possible_paths:
+            try:
+                url = f"http://{self._ip}{path}"
+                with urllib.request.urlopen(url, context=context, timeout=self._timeout) as response:
+                    html = response.read().decode("utf-8", errors="ignore")
+                    
+                    # Debug: logging can be added here if needed
+                    found_on_this_page = False
+                    for key, pattern in patterns.items():
+                        match = re.search(pattern, html, re.DOTALL | re.IGNORECASE)
+                        if match:
+                            self._usage_data[key] = match.group(1).strip()
+                            found_on_this_page = True
+                    
+                    if found_on_this_page:
+                        break
+            except Exception:
+                continue
 
     def get_sensor_value(self, sensor: str) -> int | str | None:
         """Retrieves the value of a specified sensor from the parsed printer data."""
@@ -91,6 +132,10 @@ class EpsonWorkForceAPI:
         elif sensor == "wifi_direct_connection_method":
             wifi_direct = data.get("wifi_direct", {})
             result = wifi_direct.get("Connection Method") or "Unknown"
+
+        # Usage sensors
+        elif sensor in self._usage_data:
+            result = self._usage_data[sensor]
 
         # Default to ink sensors
         else:
