@@ -5,7 +5,7 @@ from typing import Any
 
 import pytest
 
-from custom_components.epson_workforce.api import EpsonHTMLParser
+from custom_components.epson_workforce.parser import EpsonHTMLParser
 
 # ---- Discover all fixtures ----
 HERE = os.path.dirname(__file__)
