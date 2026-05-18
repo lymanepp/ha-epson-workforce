@@ -243,6 +243,36 @@ class EpsonHTMLParser:
                     data[key] = val
         return data
 
+    @staticmethod
+    def parse_behaviorinfo_page(html_text: str) -> dict[str, str | None]:
+        """Parse the BEHAVIORINFO hardware-status page.
+
+        Values are status strings (e.g. 'Working normally.') and get the same
+        trailing-period cleanup applied to printer/scanner status on the main page.
+        """
+        raw = EpsonHTMLParser.parse_dt_dd_page(html_text)
+        return {k: EpsonHTMLParser._clean_status(v) for k, v in raw.items()}
+
+    # --- supplemental-page parser (dt/dd layout used by INFO_MENTINFO etc.) ---
+    @staticmethod
+    def parse_dt_dd_page(html_text: str) -> dict[str, str]:
+        """Parse key/value pairs from pages that use <dt class='key'>/<dd> markup."""
+        soup = BeautifulSoup(html_text, "html.parser")
+        result: dict[str, str] = {}
+        for dt in soup.find_all("dt", class_="key"):
+            if not isinstance(dt, Tag):
+                continue
+            key_span = dt.find("span", class_="key")
+            key = (
+                _clean_key(key_span.get_text(strip=True))
+                if isinstance(key_span, Tag)
+                else _clean_key(dt.get_text(strip=True))
+            )
+            dd = dt.find_next_sibling("dd")
+            if key and isinstance(dd, Tag):
+                result[key] = _clean_value(dd.get_text(strip=True))
+        return result
+
     # --- misc fallbacks (value-pattern based) ---
     def _extract_mac_from_text(self) -> str | None:
         txt = self.soup.get_text(" ", strip=True)
