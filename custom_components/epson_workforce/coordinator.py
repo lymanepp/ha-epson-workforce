@@ -52,20 +52,37 @@ class EpsonCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         session = async_get_clientsession(self.hass)
 
         # Fetch the main page — failure is fatal for this cycle.
+        _LOGGER.debug("Fetching main status page from %s", self._base_url)
         main_html = await self._fetch(session, _PATH_MAIN)
         if main_html is None:
-            raise UpdateFailed(f"Cannot reach printer at {self._base_url}")  # noqa: TRY003
+            raise UpdateFailed(f"Cannot reach printer at {self._base_url}")
 
         parser = EpsonHTMLParser(main_html, source=self._base_url + _PATH_MAIN)
         raw = parser.parse()
+        _LOGGER.debug(
+            "Main page parsed: model=%s status=%s inks=%s",
+            raw.get("model"),
+            raw.get("printer_status"),
+            list(raw.get("inks", {}).keys()),
+        )
 
         # Fetch supplemental pages concurrently; 404s are permanently skipped,
         # other errors are transient and retried next cycle.
+        pending = [
+            (key, path, page_parser)
+            for key, path, page_parser in _SUPPLEMENTAL
+            if path not in self._supplemental_404
+        ]
+        if pending:
+            _LOGGER.debug(
+                "Fetching %d supplemental page(s): %s",
+                len(pending),
+                [path for _, path, _ in pending],
+            )
         sup_results = await asyncio.gather(
             *[
                 self._fetch_supplemental(session, key, path, page_parser)
-                for key, path, page_parser in _SUPPLEMENTAL
-                if path not in self._supplemental_404
+                for key, path, page_parser in pending
             ],
             return_exceptions=False,
         )
@@ -74,21 +91,39 @@ class EpsonCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             if item is not None:
                 sup[item[0]] = item[1]
 
-        return _build_data(raw, sup)
+        _LOGGER.debug(
+            "Supplemental pages received: %s  |  permanently skipped (404): %s",
+            list(sup.keys()),
+            [p.split("/")[-1] for p in self._supplemental_404],
+        )
+
+        data = _build_data(raw, sup)
+        _LOGGER.debug(
+            "Built %d sensor value(s): %s",
+            len([k for k in data if not k.startswith("_")]),
+            [k for k in data if not k.startswith("_")],
+        )
+        return data
 
     async def _fetch(self, session: aiohttp.ClientSession, path: str) -> str | None:
+        url = self._base_url + path
         try:
-            async with session.get(
-                self._base_url + path, timeout=_TIMEOUT, ssl=False
-            ) as resp:
+            async with session.get(url, timeout=_TIMEOUT, ssl=False) as resp:
                 resp.raise_for_status()
-                return await resp.text(encoding="utf-8", errors="ignore")
+                html = await resp.text(encoding="utf-8", errors="ignore")
+                _LOGGER.debug("GET %s → %d (%d bytes)", url, resp.status, len(html))
+                return html
         except aiohttp.ClientResponseError as exc:
-            if exc.status == HTTP_NOT_FOUND:
-                _LOGGER.debug("404 on main page %s", path)
+            _LOGGER.debug("GET %s → HTTP %d", url, exc.status)
+            return None
+        except aiohttp.ClientConnectorError as exc:
+            _LOGGER.debug("GET %s → connection error: %s", url, exc)
+            return None
+        except TimeoutError:
+            _LOGGER.debug("GET %s → timed out after %ss", url, _TIMEOUT.total)
             return None
         except Exception as exc:
-            _LOGGER.debug("Failed to fetch %s: %s", path, exc)
+            _LOGGER.debug("GET %s → unexpected error: %s", url, exc)
             return None
 
     async def _fetch_supplemental(
@@ -98,22 +133,47 @@ class EpsonCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         path: str,
         page_parser: Any,
     ) -> tuple[str, dict] | None:
+        url = self._base_url + path
         try:
-            async with session.get(
-                self._base_url + path, timeout=_TIMEOUT, ssl=False
-            ) as resp:
+            async with session.get(url, timeout=_TIMEOUT, ssl=False) as resp:
                 if resp.status == HTTP_NOT_FOUND:
+                    _LOGGER.debug(
+                        "GET %s → 404; this page is not available on this printer"
+                        " and will not be requested again",
+                        url,
+                    )
                     self._supplemental_404.add(path)
                     return None
                 resp.raise_for_status()
                 html = await resp.text(encoding="utf-8", errors="ignore")
+                _LOGGER.debug("GET %s → %d (%d bytes)", url, resp.status, len(html))
             return (key, page_parser(html))
         except aiohttp.ClientResponseError as exc:
             if exc.status == HTTP_NOT_FOUND:
+                _LOGGER.debug(
+                    "GET %s → 404; this page is not available on this printer"
+                    " and will not be requested again",
+                    url,
+                )
                 self._supplemental_404.add(path)
+            else:
+                _LOGGER.debug(
+                    "GET %s → HTTP %d (transient, will retry)", url, exc.status
+                )
             return None
-        except Exception:
-            return None  # transient — retry next poll
+        except aiohttp.ClientConnectorError as exc:
+            _LOGGER.debug("GET %s → connection error (transient): %s", url, exc)
+            return None
+        except TimeoutError:
+            _LOGGER.debug(
+                "GET %s → timed out after %ss (transient, will retry)",
+                url,
+                _TIMEOUT.total,
+            )
+            return None
+        except Exception as exc:
+            _LOGGER.debug("GET %s → unexpected error (transient): %s", url, exc)
+            return None
 
 
 def _to_int(value: str | None) -> int | None:
