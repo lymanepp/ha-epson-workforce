@@ -11,8 +11,8 @@ import urllib.request
 from .parser import EpsonHTMLParser
 
 # Supplemental advanced-UI pages (optional — not all printers expose them)
-_PATH_MENTINFO = "/PRESENTATION/ADVANCED/INFO_MENTINFO/TOP"   # page counters
-_PATH_NWINFO = "/PRESENTATION/ADVANCED/INFO_NWINFO/TOP"       # extended network
+_PATH_MENTINFO = "/PRESENTATION/ADVANCED/INFO_MENTINFO/TOP"  # page counters
+_PATH_NWINFO = "/PRESENTATION/ADVANCED/INFO_NWINFO/TOP"  # extended network
 _PATH_BEHAVIORINFO = "/PRESENTATION/ADVANCED/INFO_BEHAVIORINFO/TOP"  # hw status
 
 _SUPPLEMENTAL_PAGES = (
@@ -20,6 +20,8 @@ _SUPPLEMENTAL_PAGES = (
     ("nwinfo", _PATH_NWINFO),
     ("behaviorinfo", _PATH_BEHAVIORINFO),
 )
+
+HTTP_NOT_FOUND = 404
 
 
 class EpsonWorkForceAPI:
@@ -33,8 +35,10 @@ class EpsonWorkForceAPI:
         # Internal
         self._parser: EpsonHTMLParser | None = None
         self._data: dict[str, Any] | None = None  # parsed dict cache
-        self._supplemental: dict[str, Any] = {}   # data from extra pages
-        self._supplemental_404: set[str] = set()  # paths permanently absent on this printer
+        self._supplemental: dict[str, Any] = {}  # data from extra pages
+        self._supplemental_404: set[str] = (
+            set()
+        )  # paths permanently absent on this printer
 
         # Defaults
         self._model: str | None = None
@@ -61,7 +65,9 @@ class EpsonWorkForceAPI:
         return (self._data or {}).get("mac_address")
 
     def update(self) -> None:
-        """Fetch and parse the HTML page from the device (rebuilds parser + resets cache)."""
+        """
+        Fetch and parse the HTML page from the device (rebuilds parser + resets cache).
+        """
         context = ssl._create_unverified_context()
         try:
             with urllib.request.urlopen(
@@ -95,7 +101,7 @@ class EpsonWorkForceAPI:
                     html = resp.read().decode("utf-8", errors="ignore")
                 self._supplemental[key] = EpsonHTMLParser.parse_dt_dd_page(html)
             except urllib.error.HTTPError as exc:
-                if exc.code == 404:
+                if exc.code == HTTP_NOT_FOUND:
                     self._supplemental_404.add(path)  # never try again
             except Exception:
                 pass  # transient — will retry next poll
@@ -145,7 +151,9 @@ class EpsonWorkForceAPI:
 
         # --- NEW: extended network info (INFO_NWINFO) ---
         elif sensor == "wifi_speed":
-            result = _parse_wifi_speed(sup.get("nwinfo", {}).get("Connection Status", ""))
+            result = _parse_wifi_speed(
+                sup.get("nwinfo", {}).get("Connection Status", "")
+            )
         elif sensor == "wifi_channel":
             result = sup.get("nwinfo", {}).get("Channel")
         elif sensor == "wifi_mode":
