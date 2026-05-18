@@ -96,28 +96,38 @@ SENSOR_TYPES: tuple[SensorEntityDescription, ...] = (
         entity_category=EntityCategory.DIAGNOSTIC,
     ),
     SensorEntityDescription(  # type: ignore[call-arg]
+        key="fax_status",
+        name="Fax Status",
+        icon="mdi:fax",
+        entity_category=EntityCategory.DIAGNOSTIC,
+    ),
+    SensorEntityDescription(  # type: ignore[call-arg]
         key="ip_address",
         name="IP Address",
         icon="mdi:ip-network",
         entity_category=EntityCategory.DIAGNOSTIC,
+        entity_registry_enabled_default=False,
     ),
     SensorEntityDescription(  # type: ignore[call-arg]
         key="signal_strength",
         name="Signal Strength",
         icon="mdi:wifi-strength-4",
         entity_category=EntityCategory.DIAGNOSTIC,
+        entity_registry_enabled_default=False,
     ),
     SensorEntityDescription(  # type: ignore[call-arg]
         key="ssid",
         name="WiFi Network",
         icon="mdi:wifi-settings",
         entity_category=EntityCategory.DIAGNOSTIC,
+        entity_registry_enabled_default=False,
     ),
     SensorEntityDescription(  # type: ignore[call-arg]
         key="wifi_direct_connection_method",
         name="WiFi Direct Connection",
         icon="mdi:connection",
         entity_category=EntityCategory.DIAGNOSTIC,
+        entity_registry_enabled_default=False,
     ),
     # --- Page counters (INFO_MENTINFO) ---
     SensorEntityDescription(  # type: ignore[call-arg]
@@ -155,6 +165,7 @@ SENSOR_TYPES: tuple[SensorEntityDescription, ...] = (
         name="First Print Date",
         icon="mdi:calendar",
         entity_category=EntityCategory.DIAGNOSTIC,
+        entity_registry_enabled_default=False,
     ),
     # --- Extended network info (INFO_NWINFO) ---
     SensorEntityDescription(  # type: ignore[call-arg]
@@ -162,24 +173,28 @@ SENSOR_TYPES: tuple[SensorEntityDescription, ...] = (
         name="WiFi Speed",
         icon="mdi:speedometer",
         entity_category=EntityCategory.DIAGNOSTIC,
+        entity_registry_enabled_default=False,
     ),
     SensorEntityDescription(  # type: ignore[call-arg]
         key="wifi_channel",
         name="WiFi Channel",
         icon="mdi:access-point",
         entity_category=EntityCategory.DIAGNOSTIC,
+        entity_registry_enabled_default=False,
     ),
     SensorEntityDescription(  # type: ignore[call-arg]
         key="wifi_mode",
         name="WiFi Mode",
         icon="mdi:wifi-settings",
         entity_category=EntityCategory.DIAGNOSTIC,
+        entity_registry_enabled_default=False,
     ),
     SensorEntityDescription(  # type: ignore[call-arg]
         key="wifi_security",
         name="WiFi Security",
         icon="mdi:shield-wifi",
         entity_category=EntityCategory.DIAGNOSTIC,
+        entity_registry_enabled_default=False,
     ),
     # --- Hardware status (INFO_BEHAVIORINFO) ---
     SensorEntityDescription(  # type: ignore[call-arg]
@@ -187,6 +202,7 @@ SENSOR_TYPES: tuple[SensorEntityDescription, ...] = (
         name="WiFi Hardware Status",
         icon="mdi:wifi-check",
         entity_category=EntityCategory.DIAGNOSTIC,
+        entity_registry_enabled_default=False,
     ),
 )
 

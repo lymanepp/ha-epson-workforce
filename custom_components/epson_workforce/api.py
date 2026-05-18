@@ -164,6 +164,8 @@ class EpsonWorkForceAPI:
             result = sup.get("nwinfo", {}).get("Security Level")
 
         # --- NEW: hardware status (INFO_BEHAVIORINFO) ---
+        elif sensor == "fax_status":
+            result = sup.get("behaviorinfo", {}).get("Fax")
         elif sensor == "wifi_hw_status":
             result = sup.get("behaviorinfo", {}).get("Wi-Fi")
 

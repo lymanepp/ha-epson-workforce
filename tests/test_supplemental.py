@@ -178,6 +178,14 @@ class TestNewSensorValues:
         api = _api_with_supplemental(behaviorinfo={"Wi-Fi": "Working normally."})
         assert api.get_sensor_value("wifi_hw_status") == "Working normally."
 
+    def test_fax_status(self):
+        api = _api_with_supplemental(behaviorinfo={"Fax": "Working normally."})
+        assert api.get_sensor_value("fax_status") == "Working normally."
+
+    def test_fax_status_none_when_no_supplemental(self):
+        api = _api_with_supplemental()
+        assert api.get_sensor_value("fax_status") is None
+
     def test_scanner_status_falls_back_to_behaviorinfo(self):
         """When the main page has no SCN_STATUS fieldset, scanner_status must
         fall back to the 'Scanner' key in the BEHAVIORINFO supplemental page."""
@@ -308,7 +316,6 @@ class TestSupplementalFetch404:
         assert _PATH_MENTINFO not in api._supplemental_404
 
     def test_timeout_not_blacklisted(self):
-
         from custom_components.epson_workforce.api import _PATH_MENTINFO
 
         api = self._make_api_with_responses(
@@ -349,3 +356,80 @@ class TestSupplementalFetch404:
 
         with patch("urllib.request.urlopen", side_effect=strict_urlopen):
             api.update()  # must not raise
+
+
+# ---------------------------------------------------------------------------
+# entity_registry_enabled_default — verify enabled/disabled assignments
+# ---------------------------------------------------------------------------
+
+
+class TestEntityRegistryEnabledDefault:
+    """Verify which sensors are enabled and disabled by default."""
+
+    ENABLED_BY_DEFAULT = {
+        # Ink levels — core reason for the integration
+        "BK",
+        "PB",
+        "GY",
+        "M",
+        "C",
+        "Y",
+        "LC",
+        "LM",
+        # Maintenance
+        "clean",
+        # Status sensors — actionable
+        "printer_status",
+        "scanner_status",
+        "fax_status",
+        # Page counters — useful for tracking / automations
+        "total_pages",
+        "bw_pages",
+        "color_pages",
+        "bw_scans",
+        "color_scans",
+    }
+
+    DISABLED_BY_DEFAULT = {
+        # Static network config — set-and-forget, not actionable
+        "ip_address",
+        "signal_strength",
+        "ssid",
+        "wifi_direct_connection_method",
+        "wifi_speed",
+        "wifi_channel",
+        "wifi_mode",
+        "wifi_security",
+        # One-time facts / low automation value
+        "first_print_date",
+        "wifi_hw_status",
+    }
+
+    def test_enabled_sensors_have_correct_default(self):
+        from custom_components.epson_workforce.sensor import SENSOR_TYPES
+
+        for desc in SENSOR_TYPES:
+            if desc.key in self.ENABLED_BY_DEFAULT:
+                assert (
+                    desc.entity_registry_enabled_default is True
+                ), f"{desc.key!r} should be enabled by default"
+
+    def test_disabled_sensors_have_correct_default(self):
+        from custom_components.epson_workforce.sensor import SENSOR_TYPES
+
+        for desc in SENSOR_TYPES:
+            if desc.key in self.DISABLED_BY_DEFAULT:
+                assert (
+                    desc.entity_registry_enabled_default is False
+                ), f"{desc.key!r} should be disabled by default"
+
+    def test_all_sensor_keys_are_classified(self):
+        """Every key in SENSOR_TYPES must appear in exactly one set."""
+        from custom_components.epson_workforce.sensor import SENSOR_TYPES
+
+        all_keys = {d.key for d in SENSOR_TYPES}
+        classified = self.ENABLED_BY_DEFAULT | self.DISABLED_BY_DEFAULT
+        unclassified = all_keys - classified
+        assert not unclassified, f"Unclassified sensor keys: {unclassified}"
+        overlap = self.ENABLED_BY_DEFAULT & self.DISABLED_BY_DEFAULT
+        assert not overlap, f"Keys in both sets: {overlap}"
