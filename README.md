@@ -7,14 +7,14 @@ Monitor your Epson printer's ink levels, status, and usage statistics directly i
     src="images/sensors.png"
     alt="Home Assistant Epson WorkForce Integration Sensors"
     width="300"
-    valign="top"
+    align="top"
     style="margin: 0 12px 12px 0;"
   >
   <img
     src="images/diagnostics.png"
     alt="Home Assistant Epson WorkForce Integration Diagnostics"
     width="300"
-    valign="top"
+    align="top"
     style="margin: 0 12px 12px 0;"
   >
 </p>
