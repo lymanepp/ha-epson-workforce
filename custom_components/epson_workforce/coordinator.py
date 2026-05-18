@@ -55,7 +55,7 @@ class EpsonCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         _LOGGER.debug("Fetching main status page from %s", self._base_url)
         main_html = await self._fetch(session, _PATH_MAIN)
         if main_html is None:
-            raise UpdateFailed(f"Cannot reach printer at {self._base_url}")
+            raise UpdateFailed(f"Cannot reach printer at {self._base_url}")  # noqa: TRY003
 
         parser = EpsonHTMLParser(main_html, source=self._base_url + _PATH_MAIN)
         raw = parser.parse()

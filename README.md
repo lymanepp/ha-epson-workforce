@@ -2,7 +2,7 @@
 
 Monitor your Epson printer's ink levels, status, and usage statistics directly in Home Assistant.
 
-<img src="images/ha_example.png" alt="Home Assistant Epson WorkForce Integration Example" width="300">
+<img src="images/sensors.png" alt="Home Assistant Epson WorkForce Integration Sensors" width="300">
 
 ## Supported Printers
 
