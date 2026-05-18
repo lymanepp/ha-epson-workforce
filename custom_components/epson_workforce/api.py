@@ -15,12 +15,6 @@ _PATH_MENTINFO = "/PRESENTATION/ADVANCED/INFO_MENTINFO/TOP"  # page counters
 _PATH_NWINFO = "/PRESENTATION/ADVANCED/INFO_NWINFO/TOP"  # extended network
 _PATH_BEHAVIORINFO = "/PRESENTATION/ADVANCED/INFO_BEHAVIORINFO/TOP"  # hw status
 
-_SUPPLEMENTAL_PAGES = (
-    ("mentinfo", _PATH_MENTINFO),
-    ("nwinfo", _PATH_NWINFO),
-    ("behaviorinfo", _PATH_BEHAVIORINFO),
-)
-
 HTTP_NOT_FOUND = 404
 
 
@@ -90,7 +84,15 @@ class EpsonWorkForceAPI:
         # printer and is permanently skipped. Any other error (timeout, connection
         # reset) is transient — retry next cycle since the main page is reachable.
         self._supplemental = {}
-        for key, path in _SUPPLEMENTAL_PAGES:
+        for key, path, parser in (
+            ("mentinfo", _PATH_MENTINFO, EpsonHTMLParser.parse_dt_dd_page),
+            ("nwinfo", _PATH_NWINFO, EpsonHTMLParser.parse_dt_dd_page),
+            (
+                "behaviorinfo",
+                _PATH_BEHAVIORINFO,
+                EpsonHTMLParser.parse_behaviorinfo_page,
+            ),
+        ):
             if path in self._supplemental_404:
                 continue
             try:
@@ -99,7 +101,7 @@ class EpsonWorkForceAPI:
                     url, context=context, timeout=self._timeout
                 ) as resp:
                     html = resp.read().decode("utf-8", errors="ignore")
-                self._supplemental[key] = EpsonHTMLParser.parse_dt_dd_page(html)
+                self._supplemental[key] = parser(html)
             except urllib.error.HTTPError as exc:
                 if exc.code == HTTP_NOT_FOUND:
                     self._supplemental_404.add(path)  # never try again

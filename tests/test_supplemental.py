@@ -70,6 +70,15 @@ class TestParseDtDdPage:
         assert data["Wi-Fi"] == "Working normally."
         assert data["Fax"] == "Working normally."
 
+    def test_behaviorinfo_page_strips_trailing_periods(self):
+        """parse_behaviorinfo_page must apply _clean_status to every value."""
+        data = EpsonHTMLParser.parse_behaviorinfo_page(
+            _fixture("PRESENTATION-ADVANCED-INFO_BEHAVIORINFO-TOP.html")
+        )
+        assert data["Scanner"] == "Working normally"
+        assert data["Wi-Fi"] == "Working normally"
+        assert data["Fax"] == "Working normally"
+
     def test_empty_html_returns_empty_dict(self):
         assert EpsonHTMLParser.parse_dt_dd_page("<html><body></body></html>") == {}
 
@@ -175,12 +184,12 @@ class TestNewSensorValues:
 
     # Hardware status
     def test_wifi_hw_status(self):
-        api = _api_with_supplemental(behaviorinfo={"Wi-Fi": "Working normally."})
-        assert api.get_sensor_value("wifi_hw_status") == "Working normally."
+        api = _api_with_supplemental(behaviorinfo={"Wi-Fi": "Working normally"})
+        assert api.get_sensor_value("wifi_hw_status") == "Working normally"
 
     def test_fax_status(self):
-        api = _api_with_supplemental(behaviorinfo={"Fax": "Working normally."})
-        assert api.get_sensor_value("fax_status") == "Working normally."
+        api = _api_with_supplemental(behaviorinfo={"Fax": "Working normally"})
+        assert api.get_sensor_value("fax_status") == "Working normally"
 
     def test_fax_status_none_when_no_supplemental(self):
         api = _api_with_supplemental()
@@ -189,13 +198,28 @@ class TestNewSensorValues:
     def test_scanner_status_falls_back_to_behaviorinfo(self):
         """When the main page has no SCN_STATUS fieldset, scanner_status must
         fall back to the 'Scanner' key in the BEHAVIORINFO supplemental page."""
-        api = _api_with_supplemental(behaviorinfo={"Scanner": "Working normally."})
+        api = _api_with_supplemental(behaviorinfo={"Scanner": "Working normally"})
         api._data = {}  # no scanner_status from main page
-        assert api.get_sensor_value("scanner_status") == "Working normally."
+        assert api.get_sensor_value("scanner_status") == "Working normally"
+
+    def test_behaviorinfo_values_arrive_clean(self):
+        """Sensor values from BEHAVIORINFO are already stripped by
+        parse_behaviorinfo_page — api.get_sensor_value does no cleaning itself."""
+        api = _api_with_supplemental(
+            behaviorinfo={
+                "Scanner": "Working normally",
+                "Fax": "Error",
+                "Wi-Fi": "Available",
+            }
+        )
+        api._data = {}
+        assert api.get_sensor_value("scanner_status") == "Working normally"
+        assert api.get_sensor_value("fax_status") == "Error"
+        assert api.get_sensor_value("wifi_hw_status") == "Available"
 
     def test_scanner_status_main_page_takes_priority(self):
         """If the main page does supply scanner_status, it wins over supplemental."""
-        api = _api_with_supplemental(behaviorinfo={"Scanner": "Working normally."})
+        api = _api_with_supplemental(behaviorinfo={"Scanner": "Working normally"})
         api._data = {"scanner_status": "Available"}
         assert api.get_sensor_value("scanner_status") == "Available"
 

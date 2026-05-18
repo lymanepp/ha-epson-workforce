@@ -243,6 +243,16 @@ class EpsonHTMLParser:
                     data[key] = val
         return data
 
+    @staticmethod
+    def parse_behaviorinfo_page(html_text: str) -> dict[str, str | None]:
+        """Parse the BEHAVIORINFO hardware-status page.
+
+        Values are status strings (e.g. 'Working normally.') and get the same
+        trailing-period cleanup applied to printer/scanner status on the main page.
+        """
+        raw = EpsonHTMLParser.parse_dt_dd_page(html_text)
+        return {k: EpsonHTMLParser._clean_status(v) for k, v in raw.items()}
+
     # --- supplemental-page parser (dt/dd layout used by INFO_MENTINFO etc.) ---
     @staticmethod
     def parse_dt_dd_page(html_text: str) -> dict[str, str]:
