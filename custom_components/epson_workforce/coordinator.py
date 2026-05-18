@@ -54,7 +54,7 @@ class EpsonCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         # Fetch the main page — failure is fatal for this cycle.
         main_html = await self._fetch(session, _PATH_MAIN)
         if main_html is None:
-            raise UpdateFailed(f"Cannot reach printer at {self._base_url}")
+            raise UpdateFailed(f"Cannot reach printer at {self._base_url}")  # noqa: TRY003
 
         parser = EpsonHTMLParser(main_html, source=self._base_url + _PATH_MAIN)
         raw = parser.parse()
@@ -133,7 +133,9 @@ def _parse_wifi_speed(connection_status: str) -> str | None:
 
 
 def _build_data(raw: dict[str, Any], sup: dict[str, dict]) -> dict[str, Any]:
-    """Flatten raw parser output and supplemental pages into a single sensor-keyed dict."""
+    """
+    Flatten raw parser output and supplemental pages into a single sensor-keyed dict.
+    """
     inks: dict[str, int] = raw.get("inks") or {}
     network: dict[str, str] = raw.get("network") or {}
     wifi_direct: dict[str, str] = raw.get("wifi_direct") or {}

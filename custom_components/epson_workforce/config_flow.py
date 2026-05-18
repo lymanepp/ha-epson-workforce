@@ -12,6 +12,7 @@ from .const import DOMAIN
 from .coordinator import _PATH_MAIN
 
 _TIMEOUT = aiohttp.ClientTimeout(total=8)
+HTTP_OK = 200
 
 
 class EpsonConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):  # type: ignore[call-arg]
@@ -30,7 +31,7 @@ class EpsonConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):  # type: ignore
                 async with session.get(
                     f"http://{host}{_PATH_MAIN}", timeout=_TIMEOUT, ssl=False
                 ) as resp:
-                    if resp.status != 200:
+                    if resp.status != HTTP_OK:
                         errors["base"] = "cannot_connect"
             except Exception:
                 errors["base"] = "cannot_connect"

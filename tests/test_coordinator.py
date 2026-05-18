@@ -277,9 +277,11 @@ class TestCoordinatorFetch:
 
         responses = {_PATH_MAIN: (503, "")}
 
-        with patch(
-            "custom_components.epson_workforce.coordinator.async_get_clientsession",
-            return_value=self._mock_session(responses),
+        with (
+            patch(
+                "custom_components.epson_workforce.coordinator.async_get_clientsession",
+                return_value=self._mock_session(responses),
+            ),
+            pytest.raises(UpdateFailed),
         ):
-            with pytest.raises(UpdateFailed):
-                await coordinator._async_update_data()
+            await coordinator._async_update_data()
