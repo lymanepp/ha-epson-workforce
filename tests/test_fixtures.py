@@ -35,6 +35,7 @@ EXPECTATIONS: dict[str, dict[str, Any]] = {
         "network": {
             "Signal Strength": "Excellent",
             "SSID": "The Bell Tower - IoT",
+            "Connection Status": "Wi-Fi-86Mbps",
         },
         "wifi_direct": {
             "Connection Method": "Not Set",
@@ -72,6 +73,7 @@ EXPECTATIONS: dict[str, dict[str, Any]] = {
         "network": {
             "Signal Strength": "Excellent",
             "SSID": "eLeCtRoN-Lan-SD",
+            "Connection Status": "Wi-Fi-72Mbps",
         },
         "wifi_direct": {
             "Connection Method": "Not Set",
@@ -93,6 +95,7 @@ EXPECTATIONS: dict[str, dict[str, Any]] = {
         "network": {
             "Signal Strength": "Excellent",
             "SSID": "CHAOS",
+            "Connection Status": "Wi-Fi-72Mbps",
         },
         # No wifi_direct section - this model doesn't support it
     },
@@ -112,6 +115,7 @@ EXPECTATIONS: dict[str, dict[str, Any]] = {
         "network": {
             "Signal Strength": "Excellent",
             "SSID": "knappe-home",
+            "Connection Status": "Wi-Fi-72Mbps",
         },
         "wifi_direct": {
             "Connection Method": "Not Set",
@@ -134,6 +138,29 @@ EXPECTATIONS: dict[str, dict[str, Any]] = {
         "network": {
             "Signal Strength": "Excellent",
             "SSID": "XXXX",
+            "Connection Status": "Wi-Fi-72Mbps",
+        },
+        "wifi_direct": {
+            "Connection Method": "Not Set",
+        },
+    },
+    "ET-4950.HTML": {
+        "name": "EPSON0C85BF",
+        "model": "Epson ET-4950 Series",
+        "printer_status": "Available",
+        "mac_address": "58:05:D9:0C:85:BF",
+        "ip_address": "10.0.1.116",
+        "maintenance_box": 78,
+        "inks": {
+            "BK": 57,
+            "C": 81,
+            "M": 81,
+            "Y": 81,
+        },
+        "network": {
+            "Signal Strength": "Excellent",
+            "SSID": "CHAOS PRIVATE",
+            "Connection Status": "Wi-Fi-433Mbps",
         },
         "wifi_direct": {
             "Connection Method": "Not Set",
@@ -145,6 +172,7 @@ EXPECTATIONS: dict[str, dict[str, Any]] = {
         "printer_status": "Available",
         "mac_address": "F8:25:51:51:68:32",
         "ip_address": "192.168.1.122",
+        "maintenance_box": None,
         "inks": {
             "BK": 34,
             "M": 54,
@@ -154,6 +182,7 @@ EXPECTATIONS: dict[str, dict[str, Any]] = {
         "network": {
             "Signal Strength": "Good",
             "SSID": "FRITZBOX7590",
+            "Connection Status": "Wi-Fi-72Mbps",
         },
         "wifi_direct": {
             "Connection Method": "Not Set",

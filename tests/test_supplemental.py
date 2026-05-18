@@ -178,6 +178,25 @@ class TestNewSensorValues:
         api = _api_with_supplemental(behaviorinfo={"Wi-Fi": "Working normally."})
         assert api.get_sensor_value("wifi_hw_status") == "Working normally."
 
+    def test_scanner_status_falls_back_to_behaviorinfo(self):
+        """When the main page has no SCN_STATUS fieldset, scanner_status must
+        fall back to the 'Scanner' key in the BEHAVIORINFO supplemental page."""
+        api = _api_with_supplemental(behaviorinfo={"Scanner": "Working normally."})
+        api._data = {}  # no scanner_status from main page
+        assert api.get_sensor_value("scanner_status") == "Working normally."
+
+    def test_scanner_status_main_page_takes_priority(self):
+        """If the main page does supply scanner_status, it wins over supplemental."""
+        api = _api_with_supplemental(behaviorinfo={"Scanner": "Working normally."})
+        api._data = {"scanner_status": "Available"}
+        assert api.get_sensor_value("scanner_status") == "Available"
+
+    def test_scanner_status_none_when_no_data_anywhere(self):
+        """No main page value and no supplemental → None (sensor not created)."""
+        api = _api_with_supplemental()
+        api._data = {}
+        assert api.get_sensor_value("scanner_status") is None
+
     # Missing supplemental data → None (sensor won't be created)
     def test_all_new_keys_return_none_when_no_supplemental(self):
         api = _api_with_supplemental()
