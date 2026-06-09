@@ -34,6 +34,8 @@ class TestParseDtDdPage:
         data = EpsonHTMLParser.parse_dt_dd_page(
             _fixture("PRESENTATION-ADVANCED-INFO_MENTINFO-TOP.html")
         )
+        assert data["B&W Copy"] == "5"
+        assert data["Color Copy"] == "0"
         assert data["B&W Scan"] == "5"
         assert data["Color Scan"] == "0"
 
@@ -117,6 +119,8 @@ class TestEntityRegistryEnabledDefault:
         "total_pages",
         "bw_pages",
         "color_pages",
+        "bw_copies",
+        "color_copies",
         "bw_scans",
         "color_scans",
     }

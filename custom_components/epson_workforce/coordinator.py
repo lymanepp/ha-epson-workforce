@@ -225,6 +225,8 @@ def _build_data(raw: dict[str, Any], sup: dict[str, dict]) -> dict[str, Any]:
         "total_pages": _to_int(mentinfo.get("Total Number of Pages")),
         "bw_pages": _to_int(mentinfo.get("Total Number of B&W Pages")),
         "color_pages": _to_int(mentinfo.get("Total Number of Color Pages")),
+        "bw_copies": _to_int(mentinfo.get("B&W Copy")),
+        "color_copies": _to_int(mentinfo.get("Color Copy")),
         "bw_scans": _to_int(mentinfo.get("B&W Scan")),
         "color_scans": _to_int(mentinfo.get("Color Scan")),
         "first_print_date": mentinfo.get("First Printing Date") or None,

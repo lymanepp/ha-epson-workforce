@@ -143,6 +143,18 @@ SENSOR_TYPES: tuple[SensorEntityDescription, ...] = (
         state_class=SensorStateClass.TOTAL_INCREASING,
     ),
     SensorEntityDescription(  # type: ignore[call-arg]
+        key="bw_copies",
+        name="B&W Copies",
+        icon="mdi:content-copy",
+        state_class=SensorStateClass.TOTAL_INCREASING,
+    ),
+    SensorEntityDescription(  # type: ignore[call-arg]
+        key="color_copies",
+        name="Color Copies",
+        icon="mdi:content-copy",
+        state_class=SensorStateClass.TOTAL_INCREASING,
+    ),
+    SensorEntityDescription(  # type: ignore[call-arg]
         key="bw_scans",
         name="B&W Scans",
         icon="mdi:scanner",

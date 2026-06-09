@@ -85,6 +85,8 @@ def _sup(overrides=None):
             "Total Number of Pages": "1250",
             "Total Number of B&W Pages": "993",
             "Total Number of Color Pages": "257",
+            "B&W Copy": "5",
+            "Color Copy": "0",
             "B&W Scan": "5",
             "Color Scan": "0",
             "First Printing Date": "01-21-2026",
@@ -152,6 +154,8 @@ class TestBuildData:
         assert data["total_pages"] == 1250
         assert data["bw_pages"] == 993
         assert data["color_pages"] == 257
+        assert data["bw_copies"] == 5
+        assert data["color_copies"] == 0
         assert data["bw_scans"] == 5
         assert data["color_scans"] == 0
         assert data["first_print_date"] == "01-21-2026"

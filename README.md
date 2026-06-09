@@ -77,6 +77,7 @@ Sensors are created automatically based on what your specific printer reports. S
 | Scanner Status | Scanner status on all-in-one models |
 | Fax Status | Fax hardware status on fax-capable models |
 | Total/B&W/Color Pages Printed | Cumulative page counters since first use |
+| B&W/Color Copies | Cumulative copy counters |
 | B&W/Color Scans | Cumulative scan counters |
 
 ### Disabled by default
