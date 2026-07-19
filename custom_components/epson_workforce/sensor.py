@@ -1,88 +1,81 @@
-"""Support for Epson WorkForce Printer."""
+"""Sensor platform for Epson WorkForce integration."""
 
 from __future__ import annotations
-
-from datetime import timedelta
-import logging
 
 from homeassistant.components.sensor import (
     SensorEntity,
     SensorEntityDescription,
     SensorStateClass,
 )
-from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import PERCENTAGE
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity import EntityCategory
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
-from homeassistant.helpers.update_coordinator import (
-    CoordinatorEntity,
-    DataUpdateCoordinator,
-    UpdateFailed,
-)
-from homeassistant.util import slugify
+from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from . import DOMAIN
-from .api import EpsonWorkForceAPI
-
-_LOGGER = logging.getLogger(__name__)
+from . import EpsonConfigEntry
+from .const import DOMAIN
+from .coordinator import EpsonCoordinator
 
 SENSOR_TYPES: tuple[SensorEntityDescription, ...] = (
+    # --- Ink levels ---
     SensorEntityDescription(  # type: ignore[call-arg]
-        key="BK",
+        key="ink_bk",
         name="Ink level Black",
         icon="mdi:water",
         native_unit_of_measurement=PERCENTAGE,
     ),
     SensorEntityDescription(  # type: ignore[call-arg]
-        key="PB",
+        key="ink_pb",
         name="Ink level Photoblack",
         icon="mdi:water",
         native_unit_of_measurement=PERCENTAGE,
     ),
     SensorEntityDescription(  # type: ignore[call-arg]
-        key="GY",
+        key="ink_gy",
         name="Ink level Gray",
         icon="mdi:water",
         native_unit_of_measurement=PERCENTAGE,
     ),
     SensorEntityDescription(  # type: ignore[call-arg]
-        key="M",
+        key="ink_m",
         name="Ink level Magenta",
         icon="mdi:water",
         native_unit_of_measurement=PERCENTAGE,
     ),
     SensorEntityDescription(  # type: ignore[call-arg]
-        key="C",
+        key="ink_c",
         name="Ink level Cyan",
         icon="mdi:water",
         native_unit_of_measurement=PERCENTAGE,
     ),
     SensorEntityDescription(  # type: ignore[call-arg]
-        key="Y",
+        key="ink_y",
         name="Ink level Yellow",
         icon="mdi:water",
         native_unit_of_measurement=PERCENTAGE,
     ),
     SensorEntityDescription(  # type: ignore[call-arg]
-        key="LC",
+        key="ink_lc",
         name="Ink level Light Cyan",
         icon="mdi:water",
         native_unit_of_measurement=PERCENTAGE,
     ),
     SensorEntityDescription(  # type: ignore[call-arg]
-        key="LM",
+        key="ink_lm",
         name="Ink level Light Magenta",
         icon="mdi:water",
         native_unit_of_measurement=PERCENTAGE,
     ),
+    # --- Maintenance ---
     SensorEntityDescription(  # type: ignore[call-arg]
         key="clean",
         name="Cleaning level",
         icon="mdi:broom",
         native_unit_of_measurement=PERCENTAGE,
     ),
+    # --- Status ---
     SensorEntityDescription(  # type: ignore[call-arg]
         key="printer_status",
         name="Printer Status",
@@ -101,6 +94,7 @@ SENSOR_TYPES: tuple[SensorEntityDescription, ...] = (
         icon="mdi:fax",
         entity_category=EntityCategory.DIAGNOSTIC,
     ),
+    # --- Network (main page) — disabled by default ---
     SensorEntityDescription(  # type: ignore[call-arg]
         key="ip_address",
         name="IP Address",
@@ -129,7 +123,7 @@ SENSOR_TYPES: tuple[SensorEntityDescription, ...] = (
         entity_category=EntityCategory.DIAGNOSTIC,
         entity_registry_enabled_default=False,
     ),
-    # --- Page counters (INFO_MENTINFO) ---
+    # --- Page counters ---
     SensorEntityDescription(  # type: ignore[call-arg]
         key="total_pages",
         name="Total Pages Printed",
@@ -146,6 +140,18 @@ SENSOR_TYPES: tuple[SensorEntityDescription, ...] = (
         key="color_pages",
         name="Color Pages Printed",
         icon="mdi:file-document",
+        state_class=SensorStateClass.TOTAL_INCREASING,
+    ),
+    SensorEntityDescription(  # type: ignore[call-arg]
+        key="bw_copies",
+        name="B&W Copies",
+        icon="mdi:content-copy",
+        state_class=SensorStateClass.TOTAL_INCREASING,
+    ),
+    SensorEntityDescription(  # type: ignore[call-arg]
+        key="color_copies",
+        name="Color Copies",
+        icon="mdi:content-copy",
         state_class=SensorStateClass.TOTAL_INCREASING,
     ),
     SensorEntityDescription(  # type: ignore[call-arg]
@@ -167,7 +173,7 @@ SENSOR_TYPES: tuple[SensorEntityDescription, ...] = (
         entity_category=EntityCategory.DIAGNOSTIC,
         entity_registry_enabled_default=False,
     ),
-    # --- Extended network info (INFO_NWINFO) ---
+    # --- Extended network (supplemental) — disabled by default ---
     SensorEntityDescription(  # type: ignore[call-arg]
         key="wifi_speed",
         name="WiFi Speed",
@@ -196,7 +202,7 @@ SENSOR_TYPES: tuple[SensorEntityDescription, ...] = (
         entity_category=EntityCategory.DIAGNOSTIC,
         entity_registry_enabled_default=False,
     ),
-    # --- Hardware status (INFO_BEHAVIORINFO) ---
+    # --- Hardware status (supplemental) — disabled by default ---
     SensorEntityDescription(  # type: ignore[call-arg]
         key="wifi_hw_status",
         name="WiFi Hardware Status",
@@ -206,159 +212,48 @@ SENSOR_TYPES: tuple[SensorEntityDescription, ...] = (
     ),
 )
 
-SCAN_INTERVAL = timedelta(seconds=60)
-
 
 async def async_setup_entry(
     hass: HomeAssistant,
-    entry: ConfigEntry,
+    entry: EpsonConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
-    """Set up Epson WorkForce sensors from a config entry."""
-    api = hass.data[DOMAIN][entry.entry_id]
-
-    # Create update coordinator
-    coordinator = EpsonWorkForceDataUpdateCoordinator(hass, api)
-
-    # Fetch initial data so we have data when entities are added
-    await coordinator.async_config_entry_first_refresh()
-
-    # Detect which sensors are actually available on this printer
-    available_sensors = await hass.async_add_executor_job(
-        _detect_available_sensors, api
+    """Set up sensors from a config entry."""
+    coordinator: EpsonCoordinator = entry.runtime_data
+    async_add_entities(
+        EpsonSensor(coordinator, entry, desc)
+        for desc in SENSOR_TYPES
+        if desc.key in coordinator.data
     )
 
-    _LOGGER.info(
-        "Detected %d available sensors for printer %s: %s",
-        len(available_sensors),
-        entry.data["host"],
-        ", ".join(available_sensors),
-    )
 
-    # Create only sensors that are available on this printer
-    device_name = entry.data.get("name")  # Get custom device name from config
-    sensors = [
-        EpsonPrinterCartridge(coordinator, description, entry.data["host"], device_name)
-        for description in SENSOR_TYPES
-        if description.key in available_sensors
-    ]
+class EpsonSensor(CoordinatorEntity[EpsonCoordinator], SensorEntity):
+    """A single Epson printer sensor."""
 
-    _LOGGER.info(
-        "Created %d sensor entities for printer %s",
-        len(sensors),
-        entry.data["host"],
-    )
-    async_add_entities(sensors, True)
-
-
-def _detect_available_sensors(api: EpsonWorkForceAPI) -> list[str]:
-    """Detect which sensors are available on this specific printer."""
-    available_sensors: list[str] = []
-
-    for description in SENSOR_TYPES:
-        sensor_key = description.key
-        value = api.get_sensor_value(sensor_key)
-
-        # Consider a sensor available if:
-        # - It returns a non-None value
-        # - For numeric sensors: value > 0 or value == 0 (some tanks might be empty)
-        # - For string sensors: any string value except "Unknown" (no data)
-        if value is not None and isinstance(value, str | int | float):
-            # For diagnostic sensors, don't create if value is "Unknown" (no data)
-            if isinstance(value, str) and value == "Unknown":
-                continue
-            available_sensors.append(sensor_key)
-
-    return available_sensors
-
-
-def _raise_printer_unavailable() -> None:
-    """Raise UpdateFailed for printer unavailable."""
-    msg = "Printer is not available"
-    raise UpdateFailed(msg)
-
-
-class EpsonWorkForceDataUpdateCoordinator(DataUpdateCoordinator):
-    """Class to manage fetching data from the API."""
-
-    def __init__(self, hass: HomeAssistant, api: EpsonWorkForceAPI) -> None:
-        """Initialize."""
-        self.api = api
-        super().__init__(
-            hass,
-            logger=__import__("logging").getLogger(__name__),
-            name=DOMAIN,
-            update_interval=SCAN_INTERVAL,
-        )
-
-    async def _async_update_data(self):
-        """Update data via library."""
-        try:
-            await self.hass.async_add_executor_job(self.api.update)
-            if not self.api.available:
-                _raise_printer_unavailable()
-        except Exception as exception:
-            raise UpdateFailed(exception) from exception
-        else:
-            return True
-
-
-class EpsonPrinterCartridge(CoordinatorEntity, SensorEntity):
-    """Representation of a cartridge sensor."""
+    _attr_has_entity_name = True
 
     def __init__(
         self,
-        coordinator: EpsonWorkForceDataUpdateCoordinator,
+        coordinator: EpsonCoordinator,
+        entry: EpsonConfigEntry,
         description: SensorEntityDescription,
-        host: str,
-        device_name: str | None = None,
     ) -> None:
-        """Initialize a cartridge sensor."""
         super().__init__(coordinator)
         self.entity_description = description
-        self._host = host
-        self._device_name = device_name or f"Epson WorkForce ({self._host})"
-        self._device_name_clean = slugify(device_name)
-
-    @property
-    def device_info(self) -> DeviceInfo | None:  # type: ignore[override]
-        """Return device information for this printer."""
-        device_info = DeviceInfo(
-            identifiers={(DOMAIN, self._host)},
-            name=self._device_name,
+        self._attr_unique_id = f"{entry.entry_id}_{description.key}"
+        self._attr_device_info = DeviceInfo(
+            identifiers={(DOMAIN, coordinator.host)},
+            name=coordinator.data.get("_name") or f"Epson {coordinator.host}",
             manufacturer="Epson",
-            model=self.coordinator.api.model,
+            model=coordinator.data.get("_model"),
+            connections=(
+                {("mac", coordinator.data["_mac"].lower())}
+                if coordinator.data.get("_mac")
+                else set()
+            ),
         )
-
-        # Add MAC address as a connection identifier
-        if self.coordinator.api.mac_address:
-            device_info["connections"] = {
-                ("mac", self.coordinator.api.mac_address.lower())
-            }
-
-        return device_info
-
-    @property
-    def name(self) -> str | None:  # type: ignore[override]
-        """Return the name of the sensor."""
-        entity_name = self.entity_description.name
-        if not isinstance(entity_name, str):
-            return None
-        if self._device_name:
-            return f"{self._device_name} {entity_name}"
-        return entity_name
-
-    @property
-    def unique_id(self) -> str | None:  # type: ignore[override]
-        """Return a unique ID for this sensor."""
-        return f"{self._device_name_clean}_{self.entity_description.key}"
 
     @property
     def native_value(self):
-        """Return the state of the device."""
-        return self.coordinator.api.get_sensor_value(self.entity_description.key)
-
-    @property
-    def available(self) -> bool:  # type: ignore[override]
-        """Could the device be accessed during the last update call."""
-        return self.coordinator.last_update_success and self.coordinator.api.available
+        """Return current sensor value from coordinator data."""
+        return self.coordinator.data.get(self.entity_description.key)

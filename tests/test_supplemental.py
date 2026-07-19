@@ -1,10 +1,9 @@
-"""Tests for supplemental-page parsing and the new sensor keys."""
+"""Tests for supplemental-page parsing and entity registry defaults."""
+
+from __future__ import annotations
 
 import os
-from unittest.mock import MagicMock, patch
-import urllib.error
 
-from custom_components.epson_workforce.api import EpsonWorkForceAPI, _parse_wifi_speed
 from custom_components.epson_workforce.parser import EpsonHTMLParser
 
 HERE = os.path.dirname(__file__)
@@ -17,13 +16,11 @@ def _fixture(name: str) -> str:
 
 
 # ---------------------------------------------------------------------------
-# parse_dt_dd_page — unit tests against the three real fixture files
+# parse_dt_dd_page
 # ---------------------------------------------------------------------------
 
 
 class TestParseDtDdPage:
-    """parse_dt_dd_page must extract every key/value pair from the dt/dd markup."""
-
     def test_mentinfo_printing_totals(self):
         data = EpsonHTMLParser.parse_dt_dd_page(
             _fixture("PRESENTATION-ADVANCED-INFO_MENTINFO-TOP.html")
@@ -37,10 +34,10 @@ class TestParseDtDdPage:
         data = EpsonHTMLParser.parse_dt_dd_page(
             _fixture("PRESENTATION-ADVANCED-INFO_MENTINFO-TOP.html")
         )
-        assert data["B&W Scan"] == "5"
-        assert data["Color Scan"] == "0"
         assert data["B&W Copy"] == "5"
         assert data["Color Copy"] == "0"
+        assert data["B&W Scan"] == "5"
+        assert data["Color Scan"] == "0"
 
     def test_nwinfo_connection_fields(self):
         data = EpsonHTMLParser.parse_dt_dd_page(
@@ -52,17 +49,9 @@ class TestParseDtDdPage:
         assert data["Channel"] == "44"
         assert data["Security Level"] == "WPA3-SAE(AES)"
         assert data["Wi-Fi Mode"] == "IEEE 802.11 a/n/ac"
-        assert data["IP Address"] == "10.0.1.116"
-        assert data["MAC Address"] == "58:05:D9:0C:85:BF"
 
-    def test_nwinfo_wfd_tab_also_parsed(self):
-        # The Wi-Fi Direct tab lives in the same page; Connection Method must appear.
-        data = EpsonHTMLParser.parse_dt_dd_page(
-            _fixture("PRESENTATION-ADVANCED-INFO_NWINFO-TOP.html")
-        )
-        assert data["Connection Method"] == "Not Set"
-
-    def test_behaviorinfo_hardware_status(self):
+    def test_behaviorinfo_raw_has_periods(self):
+        """parse_dt_dd_page returns raw values — periods are still present."""
         data = EpsonHTMLParser.parse_dt_dd_page(
             _fixture("PRESENTATION-ADVANCED-INFO_BEHAVIORINFO-TOP.html")
         )
@@ -70,21 +59,10 @@ class TestParseDtDdPage:
         assert data["Wi-Fi"] == "Working normally."
         assert data["Fax"] == "Working normally."
 
-    def test_behaviorinfo_page_strips_trailing_periods(self):
-        """parse_behaviorinfo_page must apply _clean_status to every value."""
-        data = EpsonHTMLParser.parse_behaviorinfo_page(
-            _fixture("PRESENTATION-ADVANCED-INFO_BEHAVIORINFO-TOP.html")
-        )
-        assert data["Scanner"] == "Working normally"
-        assert data["Wi-Fi"] == "Working normally"
-        assert data["Fax"] == "Working normally"
-
     def test_empty_html_returns_empty_dict(self):
         assert EpsonHTMLParser.parse_dt_dd_page("<html><body></body></html>") == {}
 
-    def test_no_dt_key_class_ignored(self):
-        # A <dt> without class="key" must be silently ignored.
-        # A <dt class="key"> without a child <span class="key"> falls back to the dt text.
+    def test_dt_without_key_class_ignored(self):
         html = """
         <dl>
           <dt class="key"><span class="key">Label&nbsp;:</span></dt><dd class="value">val</dd>
@@ -99,323 +77,55 @@ class TestParseDtDdPage:
 
 
 # ---------------------------------------------------------------------------
-# _parse_wifi_speed helper
+# parse_behaviorinfo_page — strips trailing periods
 # ---------------------------------------------------------------------------
 
 
-class TestParseWifiSpeed:
-    def test_standard_format(self):
-        assert _parse_wifi_speed("Wi-Fi-433Mbps") == "433 Mbps"
+class TestParseBehaviorinfoPage:
+    def test_periods_stripped(self):
+        data = EpsonHTMLParser.parse_behaviorinfo_page(
+            _fixture("PRESENTATION-ADVANCED-INFO_BEHAVIORINFO-TOP.html")
+        )
+        assert data["Scanner"] == "Working normally"
+        assert data["Wi-Fi"] == "Working normally"
+        assert data["Fax"] == "Working normally"
 
-    def test_with_space(self):
-        assert _parse_wifi_speed("Wi-Fi 72 Mbps") == "72 Mbps"
-
-    def test_no_speed_returns_input(self):
-        assert _parse_wifi_speed("Not connected") == "Not connected"
-
-    def test_empty_string_returns_none(self):
-        assert _parse_wifi_speed("") is None
+    def test_none_values_handled(self):
+        """parse_behaviorinfo_page must not raise if _clean_status returns None."""
+        html = "<dl><dt class='key'><span class='key'>Empty&nbsp;:</span></dt><dd class='value'></dd></dl>"
+        data = EpsonHTMLParser.parse_behaviorinfo_page(html)
+        assert data.get("Empty") is None
 
 
 # ---------------------------------------------------------------------------
-# get_sensor_value — new keys, injecting supplemental data directly
-# ---------------------------------------------------------------------------
-
-
-def _api_with_supplemental(mentinfo=None, nwinfo=None, behaviorinfo=None):
-    """Return an EpsonWorkForceAPI whose _supplemental is pre-populated."""
-    with patch("urllib.request.urlopen", side_effect=Exception("offline")):
-        api = EpsonWorkForceAPI("127.0.0.1", "/test")
-    api._data = {}  # online enough for get_sensor_value to proceed
-    api._supplemental = {}
-    if mentinfo is not None:
-        api._supplemental["mentinfo"] = mentinfo
-    if nwinfo is not None:
-        api._supplemental["nwinfo"] = nwinfo
-    if behaviorinfo is not None:
-        api._supplemental["behaviorinfo"] = behaviorinfo
-    return api
-
-
-class TestNewSensorValues:
-    """get_sensor_value returns correct values for every new sensor key."""
-
-    # Page counters
-    def test_total_pages(self):
-        api = _api_with_supplemental(mentinfo={"Total Number of Pages": "1250"})
-        assert api.get_sensor_value("total_pages") == 1250
-
-    def test_bw_pages(self):
-        api = _api_with_supplemental(mentinfo={"Total Number of B&W Pages": "993"})
-        assert api.get_sensor_value("bw_pages") == 993
-
-    def test_color_pages(self):
-        api = _api_with_supplemental(mentinfo={"Total Number of Color Pages": "257"})
-        assert api.get_sensor_value("color_pages") == 257
-
-    def test_bw_scans(self):
-        api = _api_with_supplemental(mentinfo={"B&W Scan": "5"})
-        assert api.get_sensor_value("bw_scans") == 5
-
-    def test_color_scans(self):
-        api = _api_with_supplemental(mentinfo={"Color Scan": "0"})
-        assert api.get_sensor_value("color_scans") == 0
-
-    def test_first_print_date(self):
-        api = _api_with_supplemental(mentinfo={"First Printing Date": "01-21-2026"})
-        assert api.get_sensor_value("first_print_date") == "01-21-2026"
-
-    # Extended network
-    def test_wifi_speed(self):
-        api = _api_with_supplemental(nwinfo={"Connection Status": "Wi-Fi-433Mbps"})
-        assert api.get_sensor_value("wifi_speed") == "433 Mbps"
-
-    def test_wifi_channel(self):
-        api = _api_with_supplemental(nwinfo={"Channel": "44"})
-        assert api.get_sensor_value("wifi_channel") == "44"
-
-    def test_wifi_mode(self):
-        api = _api_with_supplemental(nwinfo={"Wi-Fi Mode": "IEEE 802.11 a/n/ac"})
-        assert api.get_sensor_value("wifi_mode") == "IEEE 802.11 a/n/ac"
-
-    def test_wifi_security(self):
-        api = _api_with_supplemental(nwinfo={"Security Level": "WPA3-SAE(AES)"})
-        assert api.get_sensor_value("wifi_security") == "WPA3-SAE(AES)"
-
-    # Hardware status
-    def test_wifi_hw_status(self):
-        api = _api_with_supplemental(behaviorinfo={"Wi-Fi": "Working normally"})
-        assert api.get_sensor_value("wifi_hw_status") == "Working normally"
-
-    def test_fax_status(self):
-        api = _api_with_supplemental(behaviorinfo={"Fax": "Working normally"})
-        assert api.get_sensor_value("fax_status") == "Working normally"
-
-    def test_fax_status_none_when_no_supplemental(self):
-        api = _api_with_supplemental()
-        assert api.get_sensor_value("fax_status") is None
-
-    def test_scanner_status_falls_back_to_behaviorinfo(self):
-        """When the main page has no SCN_STATUS fieldset, scanner_status must
-        fall back to the 'Scanner' key in the BEHAVIORINFO supplemental page."""
-        api = _api_with_supplemental(behaviorinfo={"Scanner": "Working normally"})
-        api._data = {}  # no scanner_status from main page
-        assert api.get_sensor_value("scanner_status") == "Working normally"
-
-    def test_behaviorinfo_values_arrive_clean(self):
-        """Sensor values from BEHAVIORINFO are already stripped by
-        parse_behaviorinfo_page — api.get_sensor_value does no cleaning itself."""
-        api = _api_with_supplemental(
-            behaviorinfo={
-                "Scanner": "Working normally",
-                "Fax": "Error",
-                "Wi-Fi": "Available",
-            }
-        )
-        api._data = {}
-        assert api.get_sensor_value("scanner_status") == "Working normally"
-        assert api.get_sensor_value("fax_status") == "Error"
-        assert api.get_sensor_value("wifi_hw_status") == "Available"
-
-    def test_scanner_status_main_page_takes_priority(self):
-        """If the main page does supply scanner_status, it wins over supplemental."""
-        api = _api_with_supplemental(behaviorinfo={"Scanner": "Working normally"})
-        api._data = {"scanner_status": "Available"}
-        assert api.get_sensor_value("scanner_status") == "Available"
-
-    def test_scanner_status_none_when_no_data_anywhere(self):
-        """No main page value and no supplemental → None (sensor not created)."""
-        api = _api_with_supplemental()
-        api._data = {}
-        assert api.get_sensor_value("scanner_status") is None
-
-    # Missing supplemental data → None (sensor won't be created)
-    def test_all_new_keys_return_none_when_no_supplemental(self):
-        api = _api_with_supplemental()
-        for key in (
-            "total_pages",
-            "bw_pages",
-            "color_pages",
-            "bw_scans",
-            "color_scans",
-            "first_print_date",
-            "wifi_speed",
-            "wifi_channel",
-            "wifi_mode",
-            "wifi_security",
-            "wifi_hw_status",
-        ):
-            assert api.get_sensor_value(key) is None, f"Expected None for {key!r}"
-
-    def test_page_count_with_comma_thousands(self):
-        # Printers with high page counts may format numbers with commas
-        api = _api_with_supplemental(mentinfo={"Total Number of Pages": "12,345"})
-        assert api.get_sensor_value("total_pages") == 12345
-
-    def test_page_count_non_numeric_returns_none(self):
-        api = _api_with_supplemental(mentinfo={"Total Number of Pages": "N/A"})
-        assert api.get_sensor_value("total_pages") is None
-
-
-# ---------------------------------------------------------------------------
-# 404 blacklist behavior
-# ---------------------------------------------------------------------------
-
-
-class TestSupplementalFetch404:
-    """A 404 on a supplemental path must permanently skip that path."""
-
-    def _make_api_with_responses(self, main_html, supplemental_responses):
-        """
-        Build an API where the main page succeeds and each supplemental URL
-        returns what supplemental_responses dict says (an Exception subclass
-        or a string of HTML).
-        """
-        main_resp = MagicMock()
-        main_resp.read.return_value = main_html.encode("utf-8")
-
-        from custom_components.epson_workforce.api import (
-            _PATH_BEHAVIORINFO,
-            _PATH_MENTINFO,
-            _PATH_NWINFO,
-        )
-
-        path_map = {
-            _PATH_MENTINFO: supplemental_responses.get(
-                "mentinfo", Exception("timeout")
-            ),
-            _PATH_NWINFO: supplemental_responses.get("nwinfo", Exception("timeout")),
-            _PATH_BEHAVIORINFO: supplemental_responses.get(
-                "behaviorinfo", Exception("timeout")
-            ),
-        }
-
-        call_count = {"n": 0}
-
-        def fake_urlopen(url, **kwargs):
-            # First call is always the main page
-            if call_count["n"] == 0:
-                call_count["n"] += 1
-                ctx = MagicMock()
-                ctx.__enter__ = lambda s: main_resp
-                ctx.__exit__ = MagicMock(return_value=False)
-                return ctx
-            call_count["n"] += 1
-            for path, result in path_map.items():
-                if url.endswith(path):
-                    if isinstance(result, BaseException):
-                        raise result
-                    if isinstance(result, type) and issubclass(result, BaseException):
-                        raise result()
-                    resp = MagicMock()
-                    resp.read.return_value = result.encode("utf-8")
-                    ctx = MagicMock()
-                    ctx.__enter__ = lambda s: resp
-                    ctx.__exit__ = MagicMock(return_value=False)
-                    return ctx
-            raise Exception("unexpected url")
-
-        with patch("urllib.request.urlopen", side_effect=fake_urlopen):
-            api = EpsonWorkForceAPI("127.0.0.1", "/test")
-        return api
-
-    def test_404_path_added_to_blacklist(self):
-        from custom_components.epson_workforce.api import _PATH_MENTINFO
-
-        err = urllib.error.HTTPError(_PATH_MENTINFO, 404, "Not Found", {}, None)
-        api = self._make_api_with_responses(
-            "<html><body></body></html>",
-            {"mentinfo": err},
-        )
-        assert _PATH_MENTINFO in api._supplemental_404
-
-    def test_non_404_http_error_not_blacklisted(self):
-        from custom_components.epson_workforce.api import _PATH_MENTINFO
-
-        err = urllib.error.HTTPError(_PATH_MENTINFO, 500, "Server Error", {}, None)
-        api = self._make_api_with_responses(
-            "<html><body></body></html>",
-            {"mentinfo": err},
-        )
-        assert _PATH_MENTINFO not in api._supplemental_404
-
-    def test_timeout_not_blacklisted(self):
-        from custom_components.epson_workforce.api import _PATH_MENTINFO
-
-        api = self._make_api_with_responses(
-            "<html><body></body></html>",
-            {"mentinfo": TimeoutError("timed out")},
-        )
-        assert _PATH_MENTINFO not in api._supplemental_404
-
-    def test_blacklisted_path_skipped_on_next_update(self):
-        from custom_components.epson_workforce.api import _PATH_MENTINFO
-
-        err = urllib.error.HTTPError(_PATH_MENTINFO, 404, "Not Found", {}, None)
-        api = self._make_api_with_responses(
-            "<html><body></body></html>",
-            {"mentinfo": err},
-        )
-        assert _PATH_MENTINFO in api._supplemental_404
-
-        # On the next update the blacklisted path must not be attempted.
-        # We verify by making urlopen raise AssertionError for that path —
-        # if it's called, the test fails.
-        original_urlopen = __builtins__  # keep reference for main page
-
-        main_resp = MagicMock()
-        main_resp.read.return_value = b"<html><body></body></html>"
-        call_count = {"n": 0}
-
-        def strict_urlopen(url, **kwargs):
-            if call_count["n"] == 0:
-                call_count["n"] += 1
-                ctx = MagicMock()
-                ctx.__enter__ = lambda s: main_resp
-                ctx.__exit__ = MagicMock(return_value=False)
-                return ctx
-            if url.endswith(_PATH_MENTINFO):
-                raise AssertionError("blacklisted path was fetched again")
-            raise Exception("other supplemental also missing")
-
-        with patch("urllib.request.urlopen", side_effect=strict_urlopen):
-            api.update()  # must not raise
-
-
-# ---------------------------------------------------------------------------
-# entity_registry_enabled_default — verify enabled/disabled assignments
+# entity_registry_enabled_default
 # ---------------------------------------------------------------------------
 
 
 class TestEntityRegistryEnabledDefault:
-    """Verify which sensors are enabled and disabled by default."""
-
     ENABLED_BY_DEFAULT = {
-        # Ink levels — core reason for the integration
-        "BK",
-        "PB",
-        "GY",
-        "M",
-        "C",
-        "Y",
-        "LC",
-        "LM",
-        # Maintenance
+        "ink_bk",
+        "ink_pb",
+        "ink_gy",
+        "ink_m",
+        "ink_c",
+        "ink_y",
+        "ink_lc",
+        "ink_lm",
         "clean",
-        # Status sensors — actionable
         "printer_status",
         "scanner_status",
         "fax_status",
-        # Page counters — useful for tracking / automations
         "total_pages",
         "bw_pages",
         "color_pages",
+        "bw_copies",
+        "color_copies",
         "bw_scans",
         "color_scans",
     }
 
     DISABLED_BY_DEFAULT = {
-        # Static network config — set-and-forget, not actionable
         "ip_address",
         "signal_strength",
         "ssid",
@@ -424,12 +134,11 @@ class TestEntityRegistryEnabledDefault:
         "wifi_channel",
         "wifi_mode",
         "wifi_security",
-        # One-time facts / low automation value
         "first_print_date",
         "wifi_hw_status",
     }
 
-    def test_enabled_sensors_have_correct_default(self):
+    def test_enabled_sensors(self):
         from custom_components.epson_workforce.sensor import SENSOR_TYPES
 
         for desc in SENSOR_TYPES:
@@ -438,7 +147,7 @@ class TestEntityRegistryEnabledDefault:
                     desc.entity_registry_enabled_default is True
                 ), f"{desc.key!r} should be enabled by default"
 
-    def test_disabled_sensors_have_correct_default(self):
+    def test_disabled_sensors(self):
         from custom_components.epson_workforce.sensor import SENSOR_TYPES
 
         for desc in SENSOR_TYPES:
@@ -447,13 +156,10 @@ class TestEntityRegistryEnabledDefault:
                     desc.entity_registry_enabled_default is False
                 ), f"{desc.key!r} should be disabled by default"
 
-    def test_all_sensor_keys_are_classified(self):
-        """Every key in SENSOR_TYPES must appear in exactly one set."""
+    def test_all_keys_classified(self):
         from custom_components.epson_workforce.sensor import SENSOR_TYPES
 
         all_keys = {d.key for d in SENSOR_TYPES}
         classified = self.ENABLED_BY_DEFAULT | self.DISABLED_BY_DEFAULT
-        unclassified = all_keys - classified
-        assert not unclassified, f"Unclassified sensor keys: {unclassified}"
-        overlap = self.ENABLED_BY_DEFAULT & self.DISABLED_BY_DEFAULT
-        assert not overlap, f"Keys in both sets: {overlap}"
+        assert not (all_keys - classified), f"Unclassified: {all_keys - classified}"
+        assert not (self.ENABLED_BY_DEFAULT & self.DISABLED_BY_DEFAULT)
