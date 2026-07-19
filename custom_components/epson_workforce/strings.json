@@ -3,26 +3,17 @@
     "step": {
       "user": {
         "title": "Epson WorkForce Printer",
-        "description": "Configure your Epson WorkForce printer connection",
+        "description": "Enter the IP address of your Epson printer.",
         "data": {
-          "host": "IP Address",
-          "path": "Status Page Path"
-        }
-      },
-      "device_name": {
-        "title": "Device Name",
-        "description": "We detected your printer as \"{detected_name}\". You can customize the device name below.",
-        "data": {
-          "name": "Device Name"
+          "host": "IP Address"
         }
       }
     },
     "error": {
-      "cannot_connect": "Failed to connect to the printer. Please check the IP address and ensure the printer is on the network.",
-      "unknown": "Unexpected error occurred"
+      "cannot_connect": "Failed to connect. Check the IP address and ensure the printer is on the network."
     },
     "abort": {
-      "already_configured": "This printer is already configured"
+      "already_configured": "This printer is already configured."
     }
   }
 }
