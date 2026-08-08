@@ -32,6 +32,7 @@ _SUPPLEMENTAL = (
 
 HTTP_NOT_FOUND = 404
 _TIMEOUT = aiohttp.ClientTimeout(total=10)
+_EPSON_ENGLISH_COOKIE = "EPSON_COOKIE_LANG=lang_b&1/lang_a&1"
 
 
 class EpsonCoordinator(DataUpdateCoordinator[dict[str, Any]]):
@@ -105,10 +106,23 @@ class EpsonCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         )
         return data
 
+    def _status_request(
+        self,
+        session: aiohttp.ClientSession,
+        path: str,
+    ):
+        """Request an Epson Web Config status page using a stable English locale."""
+        return session.get(
+            self._base_url + path,
+            timeout=_TIMEOUT,
+            ssl=False,
+            headers={"Cookie": _EPSON_ENGLISH_COOKIE},
+        )
+
     async def _fetch(self, session: aiohttp.ClientSession, path: str) -> str | None:
         url = self._base_url + path
         try:
-            async with session.get(url, timeout=_TIMEOUT, ssl=False) as resp:
+            async with self._status_request(session, path) as resp:
                 resp.raise_for_status()
                 html = await resp.text(encoding="utf-8", errors="ignore")
                 _LOGGER.debug("GET %s → %d (%d bytes)", url, resp.status, len(html))
@@ -135,7 +149,7 @@ class EpsonCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     ) -> tuple[str, dict] | None:
         url = self._base_url + path
         try:
-            async with session.get(url, timeout=_TIMEOUT, ssl=False) as resp:
+            async with self._status_request(session, path) as resp:
                 if resp.status == HTTP_NOT_FOUND:
                     _LOGGER.debug(
                         "GET %s → 404; this page is not available on this printer"
