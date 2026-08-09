@@ -250,8 +250,6 @@ class TestCoordinatorFetch:
             _PATH_MENTINFO,
         )
 
-        coordinator = _make_coordinator(hass)
-
         main_html = (
             "<html><head><title>ET-4950 Series</title></head><body>"
             "<fieldset id='PRT_STATUS'><ul><li>Available.</li></ul></fieldset>"
@@ -264,9 +262,10 @@ class TestCoordinatorFetch:
         }
 
         with patch(
-            "custom_components.epson_workforce.coordinator.async_get_clientsession",
+            "custom_components.epson_workforce.coordinator.async_create_clientsession",
             return_value=self._mock_session(responses),
         ):
+            coordinator = _make_coordinator(hass)
             await coordinator._async_update_data()
 
         assert _PATH_MENTINFO in coordinator._supplemental_404
@@ -277,15 +276,39 @@ class TestCoordinatorFetch:
 
         from custom_components.epson_workforce.coordinator import _PATH_MAIN
 
-        coordinator = _make_coordinator(hass)
-
         responses = {_PATH_MAIN: (503, "")}
 
         with (
             patch(
-                "custom_components.epson_workforce.coordinator.async_get_clientsession",
+                "custom_components.epson_workforce.coordinator.async_create_clientsession",
                 return_value=self._mock_session(responses),
             ),
             pytest.raises(UpdateFailed),
         ):
+            coordinator = _make_coordinator(hass)
             await coordinator._async_update_data()
+
+    @pytest.mark.asyncio
+    async def test_status_request_forces_english_cookie(self, hass):
+        from custom_components.epson_workforce.coordinator import (
+            _EPSON_ENGLISH_COOKIE,
+            _PATH_MAIN,
+            _TIMEOUT,
+        )
+
+        session = self._mock_session({_PATH_MAIN: (200, "")})
+
+        with patch(
+            "custom_components.epson_workforce.coordinator.async_create_clientsession",
+            return_value=session,
+        ):
+            coordinator = _make_coordinator(hass)
+
+        coordinator._status_request(_PATH_MAIN)
+
+        session.get.assert_called_once_with(
+            f"http://10.0.1.116{_PATH_MAIN}",
+            timeout=_TIMEOUT,
+            ssl=False,
+            headers={"Cookie": _EPSON_ENGLISH_COOKIE},
+        )

@@ -59,11 +59,9 @@ class EpsonCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         )
 
     async def _async_update_data(self) -> dict[str, Any]:
-        session = self._session
-
         # Fetch the main page — failure is fatal for this cycle.
         _LOGGER.debug("Fetching main status page from %s", self._base_url)
-        main_html = await self._fetch(session, _PATH_MAIN)
+        main_html = await self._fetch(_PATH_MAIN)
         if main_html is None:
             raise UpdateFailed(f"Cannot reach printer at {self._base_url}")  # noqa: TRY003
 
@@ -91,7 +89,7 @@ class EpsonCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             )
         sup_results = await asyncio.gather(
             *[
-                self._fetch_supplemental(session, key, path, page_parser)
+                self._fetch_supplemental(key, path, page_parser)
                 for key, path, page_parser in pending
             ],
             return_exceptions=False,
@@ -115,23 +113,19 @@ class EpsonCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         )
         return data
 
-    def _status_request(
-        self,
-        session: aiohttp.ClientSession,
-        path: str,
-    ):
+    def _status_request(self, path: str):
         """Request an Epson status page in English."""
-        return session.get(
+        return self._session.get(
             self._base_url + path,
             timeout=_TIMEOUT,
             ssl=False,
             headers={"Cookie": _EPSON_ENGLISH_COOKIE},
         )
 
-    async def _fetch(self, session: aiohttp.ClientSession, path: str) -> str | None:
+    async def _fetch(self, path: str) -> str | None:
         url = self._base_url + path
         try:
-            async with self._status_request(session, path) as resp:
+            async with self._status_request(path) as resp:
                 resp.raise_for_status()
                 html = await resp.text(encoding="utf-8", errors="ignore")
                 _LOGGER.debug("GET %s → %d (%d bytes)", url, resp.status, len(html))
@@ -151,14 +145,13 @@ class EpsonCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
     async def _fetch_supplemental(
         self,
-        session: aiohttp.ClientSession,
         key: str,
         path: str,
         page_parser: Any,
     ) -> tuple[str, dict] | None:
         url = self._base_url + path
         try:
-            async with self._status_request(session, path) as resp:
+            async with self._status_request(path) as resp:
                 if resp.status == HTTP_NOT_FOUND:
                     _LOGGER.debug(
                         "GET %s → 404; this page is not available on this printer"
