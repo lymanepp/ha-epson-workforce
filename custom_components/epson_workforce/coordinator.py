@@ -10,7 +10,7 @@ from typing import Any
 
 import aiohttp
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers.aiohttp_client import async_get_clientsession
+from homeassistant.helpers.aiohttp_client import async_create_clientsession
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
 from .parser import EpsonHTMLParser
@@ -32,6 +32,9 @@ _SUPPLEMENTAL = (
 
 HTTP_NOT_FOUND = 404
 _TIMEOUT = aiohttp.ClientTimeout(total=10)
+
+# Epson localizes scraped labels according to this cookie. Force English so the
+# parser receives stable keys regardless of the language configured in Web Config.
 _EPSON_ENGLISH_COOKIE = "EPSON_COOKIE_LANG=lang_b&1/lang_a&1"
 
 
@@ -42,6 +45,12 @@ class EpsonCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self.host = host
         self._base_url = f"http://{host}"
         self._supplemental_404: set[str] = set()
+        # Use a dedicated session with no cookie persistence. Epson Web Config
+        # localizes responses via EPSON_COOKIE_LANG, so a shared cookie jar could
+        # overwrite the English cookie we explicitly send on each request.
+        self._session = async_create_clientsession(
+            hass, cookie_jar=aiohttp.DummyCookieJar()
+        )
         super().__init__(
             hass,
             _LOGGER,
@@ -50,7 +59,7 @@ class EpsonCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         )
 
     async def _async_update_data(self) -> dict[str, Any]:
-        session = async_get_clientsession(self.hass)
+        session = self._session
 
         # Fetch the main page — failure is fatal for this cycle.
         _LOGGER.debug("Fetching main status page from %s", self._base_url)
@@ -111,7 +120,7 @@ class EpsonCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         session: aiohttp.ClientSession,
         path: str,
     ):
-        """Request an Epson Web Config status page using a stable English locale."""
+        """Request an Epson status page in English."""
         return session.get(
             self._base_url + path,
             timeout=_TIMEOUT,
