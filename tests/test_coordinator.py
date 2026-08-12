@@ -307,6 +307,60 @@ class TestCoordinatorFetch:
         coordinator._status_request(_PATH_MAIN)
 
         session.get.assert_called_once_with(
+            f"https://10.0.1.116{_PATH_MAIN}",
+            timeout=_TIMEOUT,
+            ssl=False,
+            headers={"Cookie": _EPSON_ENGLISH_COOKIE},
+        )
+
+    @pytest.mark.asyncio
+    async def test_https_failure_falls_back_to_http(self, hass):
+        from custom_components.epson_workforce.coordinator import (
+            _EPSON_ENGLISH_COOKIE,
+            _PATH_MAIN,
+            _TIMEOUT,
+        )
+
+        main_html = (
+            "<html><head><title>ET-4950 Series</title></head><body>"
+            "<fieldset id='PRT_STATUS'><ul><li>Available.</li></ul></fieldset>"
+            "</body></html>"
+        )
+
+        def fake_get(url, **kwargs):
+            if url.startswith("https://"):
+                raise aiohttp.ClientConnectionError("HTTPS unavailable")
+            if url == f"http://10.0.1.116{_PATH_MAIN}":
+                resp = MagicMock()
+                resp.status = 200
+                resp.raise_for_status = MagicMock()
+                resp.text = AsyncMock(return_value=main_html)
+                cm = MagicMock()
+                cm.__aenter__ = AsyncMock(return_value=resp)
+                cm.__aexit__ = AsyncMock(return_value=False)
+                return cm
+            raise Exception(f"Unexpected URL: {url}")
+
+        session = MagicMock()
+        session.get = MagicMock(side_effect=fake_get)
+
+        with patch(
+            "custom_components.epson_workforce.coordinator.async_create_clientsession",
+            return_value=session,
+        ):
+            coordinator = _make_coordinator(hass)
+            html = await coordinator._fetch(_PATH_MAIN)
+
+        assert html == main_html
+        assert coordinator._base_url == "http://10.0.1.116"
+        assert session.get.call_count == 2
+        session.get.assert_any_call(
+            f"https://10.0.1.116{_PATH_MAIN}",
+            timeout=_TIMEOUT,
+            ssl=False,
+            headers={"Cookie": _EPSON_ENGLISH_COOKIE},
+        )
+        session.get.assert_any_call(
             f"http://10.0.1.116{_PATH_MAIN}",
             timeout=_TIMEOUT,
             ssl=False,

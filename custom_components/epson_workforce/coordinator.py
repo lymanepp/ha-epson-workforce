@@ -43,7 +43,7 @@ class EpsonCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
     def __init__(self, hass: HomeAssistant, host: str) -> None:
         self.host = host
-        self._base_url = f"http://{host}"
+        self._base_url = f"https://{host}"
         self._supplemental_404: set[str] = set()
         # Use a dedicated session with no cookie persistence. Epson Web Config
         # localizes responses via EPSON_COOKIE_LANG, so a shared cookie jar could
@@ -113,35 +113,52 @@ class EpsonCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         )
         return data
 
-    def _status_request(self, path: str):
+    def _status_request(self, path: str, *, base_url: str | None = None):
         """Request an Epson status page in English."""
         return self._session.get(
-            self._base_url + path,
+            (base_url or self._base_url) + path,
             timeout=_TIMEOUT,
             ssl=False,
             headers={"Cookie": _EPSON_ENGLISH_COOKIE},
         )
 
     async def _fetch(self, path: str) -> str | None:
-        url = self._base_url + path
-        try:
-            async with self._status_request(path) as resp:
-                resp.raise_for_status()
-                html = await resp.text(encoding="utf-8", errors="ignore")
-                _LOGGER.debug("GET %s → %d (%d bytes)", url, resp.status, len(html))
-                return html
-        except aiohttp.ClientResponseError as exc:
-            _LOGGER.debug("GET %s → HTTP %d", url, exc.status)
-            return None
-        except aiohttp.ClientConnectorError as exc:
-            _LOGGER.debug("GET %s → connection error: %s", url, exc)
-            return None
-        except TimeoutError:
-            _LOGGER.debug("GET %s → timed out after %ss", url, _TIMEOUT.total)
-            return None
-        except Exception as exc:
-            _LOGGER.debug("GET %s → unexpected error: %s", url, exc)
-            return None
+        base_urls = [self._base_url]
+        if self._base_url.startswith("https://"):
+            base_urls.append(f"http://{self.host}")
+
+        for index, base_url in enumerate(base_urls):
+            url = base_url + path
+            try:
+                async with self._status_request(path, base_url=base_url) as resp:
+                    resp.raise_for_status()
+                    html = await resp.text(encoding="utf-8", errors="ignore")
+                    self._base_url = base_url
+                    _LOGGER.debug(
+                        "GET %s → %d (%d bytes)", url, resp.status, len(html)
+                    )
+                    return html
+            except aiohttp.ClientResponseError as exc:
+                _LOGGER.debug("GET %s → HTTP %d", url, exc.status)
+                return None
+            except (aiohttp.ClientConnectionError, TimeoutError) as exc:
+                if index + 1 < len(base_urls):
+                    _LOGGER.debug(
+                        "GET %s → connection failed (%s); trying HTTP", url, exc
+                    )
+                    continue
+                if isinstance(exc, TimeoutError):
+                    _LOGGER.debug(
+                        "GET %s → timed out after %ss", url, _TIMEOUT.total
+                    )
+                else:
+                    _LOGGER.debug("GET %s → connection error: %s", url, exc)
+                return None
+            except Exception as exc:
+                _LOGGER.debug("GET %s → unexpected error: %s", url, exc)
+                return None
+
+        return None
 
     async def _fetch_supplemental(
         self,
@@ -177,7 +194,7 @@ class EpsonCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     "GET %s → HTTP %d (transient, will retry)", url, exc.status
                 )
             return None
-        except aiohttp.ClientConnectorError as exc:
+        except aiohttp.ClientConnectionError as exc:
             _LOGGER.debug("GET %s → connection error (transient): %s", url, exc)
             return None
         except TimeoutError:
