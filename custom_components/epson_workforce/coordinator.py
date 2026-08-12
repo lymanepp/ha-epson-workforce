@@ -134,9 +134,7 @@ class EpsonCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     resp.raise_for_status()
                     html = await resp.text(encoding="utf-8", errors="ignore")
                     self._base_url = base_url
-                    _LOGGER.debug(
-                        "GET %s → %d (%d bytes)", url, resp.status, len(html)
-                    )
+                    _LOGGER.debug("GET %s → %d (%d bytes)", url, resp.status, len(html))
                     return html
             except aiohttp.ClientResponseError as exc:
                 _LOGGER.debug("GET %s → HTTP %d", url, exc.status)
@@ -148,9 +146,7 @@ class EpsonCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     )
                     continue
                 if isinstance(exc, TimeoutError):
-                    _LOGGER.debug(
-                        "GET %s → timed out after %ss", url, _TIMEOUT.total
-                    )
+                    _LOGGER.debug("GET %s → timed out after %ss", url, _TIMEOUT.total)
                 else:
                     _LOGGER.debug("GET %s → connection error: %s", url, exc)
                 return None
