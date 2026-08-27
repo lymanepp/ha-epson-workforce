@@ -194,19 +194,16 @@ class EpsonHTMLParser:
 
         style_val = bar_div.get("style")
         if style_val:
-            style = " ".join(style_val) if isinstance(style_val, list) else str(style_val)
+            style = (
+                " ".join(style_val) if isinstance(style_val, list) else str(style_val)
+            )
             s = style.lower()
 
             # Prefer the level from linear gradient.
             # Some printers put a low-ink warning icon inside the tank
             # which must not be mistaken for the ink level.
             if "linear-gradient" in s:
-                nums = [
-                    float(n)
-                    for n in re.findall(
-                        r"(\d{1,3}(?:\.\d+)?)\s*%", s
-                    )
-                ]
+                nums = [float(n) for n in re.findall(r"(\d{1,3}(?:\.\d+)?)\s*%", s)]
                 if len(nums) >= 2:
                     val = int(round(nums[1]))
                     return max(0, min(100, val))
