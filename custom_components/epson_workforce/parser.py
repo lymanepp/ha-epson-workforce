@@ -188,36 +188,39 @@ class EpsonHTMLParser:
             if any(c.lower() == "tank" for c in _classes(d)):
                 bar_div = d
                 break
+
         if bar_div is None:
             return None
 
-        # get level from image height
+        style_val = bar_div.get("style")
+        if style_val:
+            style = (
+                " ".join(style_val) if isinstance(style_val, list) else str(style_val)
+            )
+            s = style.lower()
+
+            # Prefer the level from linear gradient.
+            # Some printers put a low-ink warning icon inside the tank
+            # which must not be mistaken for the ink level.
+            if "linear-gradient" in s:
+                nums = [float(n) for n in re.findall(r"(\d{1,3}(?:\.\d+)?)\s*%", s)]
+                if len(nums) >= 2:  # noqa: PLR2004
+                    val = int(round(nums[1]))
+                    return max(0, min(100, val))
+
+            # Fallback: get level from height in style.
+            m = re.search(r"height\s*:\s*(\d+)", s)
+            if m:
+                px = int(m.group(1))
+                return max(0, min(100, px * 2))  # 50px → 100%
+
+        # Fallback for printers where the level is represented by image height.
         img = bar_div.find("img")
         if isinstance(img, Tag):
             h = img.get("height")
             if isinstance(h, str) and h.isdigit():
                 px = int(h)
                 return max(0, min(100, px * 2))
-
-        style_val = bar_div.get("style")
-        if not style_val:
-            return None
-
-        style = " ".join(style_val) if isinstance(style_val, list) else str(style_val)
-        s = style.lower()
-
-        # get level from height in style
-        m = re.search(r"height\s*:\s*(\d+)", s)
-        if m:
-            px = int(m.group(1))
-            return max(0, min(100, px * 2))  # 50px → 100%
-
-        # get level from linear gradient in style
-        if "linear-gradient" in s:
-            nums = [float(n) for n in re.findall(r"(\d{1,3}(?:\.\d+)?)\s*%", s)]
-            if len(nums) >= 2:  # noqa: PLR2004
-                val = int(round(nums[1]))
-                return max(0, min(100, val))
 
         return None
 
