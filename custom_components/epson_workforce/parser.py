@@ -204,7 +204,7 @@ class EpsonHTMLParser:
             # which must not be mistaken for the ink level.
             if "linear-gradient" in s:
                 nums = [float(n) for n in re.findall(r"(\d{1,3}(?:\.\d+)?)\s*%", s)]
-                if len(nums) >= 2:
+                if len(nums) >= 2:  # noqa: PLR2004
                     val = int(round(nums[1]))
                     return max(0, min(100, val))
 
@@ -212,7 +212,7 @@ class EpsonHTMLParser:
             m = re.search(r"height\s*:\s*(\d+)", s)
             if m:
                 px = int(m.group(1))
-                return max(0, min(100, px * 2))
+                return max(0, min(100, px * 2))  # 50px → 100%
 
         # Fallback for printers where the level is represented by image height.
         img = bar_div.find("img")
