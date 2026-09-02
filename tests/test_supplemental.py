@@ -163,3 +163,47 @@ class TestEntityRegistryEnabledDefault:
         classified = self.ENABLED_BY_DEFAULT | self.DISABLED_BY_DEFAULT
         assert not (all_keys - classified), f"Unclassified: {all_keys - classified}"
         assert not (self.ENABLED_BY_DEFAULT & self.DISABLED_BY_DEFAULT)
+
+
+# ---------------------------------------------------------------------------
+# state_class
+# ---------------------------------------------------------------------------
+
+
+class TestSensorStateClass:
+    """Percentage sensors need a state class to get long-term statistics."""
+
+    PERCENTAGE_KEYS = {
+        "ink_bk",
+        "ink_pb",
+        "ink_gy",
+        "ink_m",
+        "ink_c",
+        "ink_y",
+        "ink_lc",
+        "ink_lm",
+        "clean",
+    }
+
+    def test_percentage_sensors_are_measurements(self):
+        from homeassistant.components.sensor import SensorStateClass
+
+        from custom_components.epson_workforce.sensor import SENSOR_TYPES
+
+        for desc in SENSOR_TYPES:
+            if desc.key in self.PERCENTAGE_KEYS:
+                assert (
+                    desc.state_class == SensorStateClass.MEASUREMENT
+                ), f"{desc.key!r} should be a measurement"
+
+    def test_percentage_keys_match_sensor_types(self):
+        from homeassistant.const import PERCENTAGE
+
+        from custom_components.epson_workforce.sensor import SENSOR_TYPES
+
+        actual = {
+            desc.key
+            for desc in SENSOR_TYPES
+            if desc.native_unit_of_measurement == PERCENTAGE
+        }
+        assert actual == self.PERCENTAGE_KEYS

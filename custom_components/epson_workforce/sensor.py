@@ -25,48 +25,56 @@ SENSOR_TYPES: tuple[SensorEntityDescription, ...] = (
         name="Ink level Black",
         icon="mdi:water",
         native_unit_of_measurement=PERCENTAGE,
+        state_class=SensorStateClass.MEASUREMENT,
     ),
     SensorEntityDescription(  # type: ignore[call-arg]
         key="ink_pb",
         name="Ink level Photoblack",
         icon="mdi:water",
         native_unit_of_measurement=PERCENTAGE,
+        state_class=SensorStateClass.MEASUREMENT,
     ),
     SensorEntityDescription(  # type: ignore[call-arg]
         key="ink_gy",
         name="Ink level Gray",
         icon="mdi:water",
         native_unit_of_measurement=PERCENTAGE,
+        state_class=SensorStateClass.MEASUREMENT,
     ),
     SensorEntityDescription(  # type: ignore[call-arg]
         key="ink_m",
         name="Ink level Magenta",
         icon="mdi:water",
         native_unit_of_measurement=PERCENTAGE,
+        state_class=SensorStateClass.MEASUREMENT,
     ),
     SensorEntityDescription(  # type: ignore[call-arg]
         key="ink_c",
         name="Ink level Cyan",
         icon="mdi:water",
         native_unit_of_measurement=PERCENTAGE,
+        state_class=SensorStateClass.MEASUREMENT,
     ),
     SensorEntityDescription(  # type: ignore[call-arg]
         key="ink_y",
         name="Ink level Yellow",
         icon="mdi:water",
         native_unit_of_measurement=PERCENTAGE,
+        state_class=SensorStateClass.MEASUREMENT,
     ),
     SensorEntityDescription(  # type: ignore[call-arg]
         key="ink_lc",
         name="Ink level Light Cyan",
         icon="mdi:water",
         native_unit_of_measurement=PERCENTAGE,
+        state_class=SensorStateClass.MEASUREMENT,
     ),
     SensorEntityDescription(  # type: ignore[call-arg]
         key="ink_lm",
         name="Ink level Light Magenta",
         icon="mdi:water",
         native_unit_of_measurement=PERCENTAGE,
+        state_class=SensorStateClass.MEASUREMENT,
     ),
     # --- Maintenance ---
     SensorEntityDescription(  # type: ignore[call-arg]
@@ -74,6 +82,7 @@ SENSOR_TYPES: tuple[SensorEntityDescription, ...] = (
         name="Cleaning level",
         icon="mdi:broom",
         native_unit_of_measurement=PERCENTAGE,
+        state_class=SensorStateClass.MEASUREMENT,
     ),
     # --- Status ---
     SensorEntityDescription(  # type: ignore[call-arg]
