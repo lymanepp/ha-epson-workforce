@@ -289,3 +289,126 @@ class TestCoordinatorFetch:
             pytest.raises(UpdateFailed),
         ):
             await coordinator._async_update_data()
+
+    # --- English-language cookie for the supplemental pages ---
+
+    _NL_MAIN_HTML = (
+        "<html><head><title>XP-4200 Series</title></head><body>"
+        "<fieldset id='PRT_STATUS'><ul><li>Beschikbaar.</li></ul></fieldset>"
+        "</body></html>"
+    )
+
+    @pytest.mark.asyncio
+    async def test_cookie_sent_for_supplemental_pages_only(self, hass):
+        from custom_components.epson_workforce.coordinator import (
+            _ENGLISH_LANG_COOKIE,
+            _PATH_BEHAVIORINFO,
+            _PATH_MAIN,
+            _PATH_MENTINFO,
+            _PATH_NWINFO,
+        )
+
+        coordinator = _make_coordinator(hass)
+        session = self._mock_session(
+            {
+                _PATH_MAIN: (200, self._NL_MAIN_HTML),
+                _PATH_MENTINFO: (200, "<dl></dl>"),
+                _PATH_NWINFO: (200, "<dl></dl>"),
+                _PATH_BEHAVIORINFO: (200, "<dl></dl>"),
+            }
+        )
+
+        with patch(
+            "custom_components.epson_workforce.coordinator.async_get_clientsession",
+            return_value=session,
+        ):
+            await coordinator._async_update_data()
+
+        headers_by_path = {
+            call.args[0].split("/PRESENTATION", 1)[-1]: call.kwargs.get("headers")
+            for call in session.get.call_args_list
+        }
+        assert len(headers_by_path) == 4
+        for path in (_PATH_MENTINFO, _PATH_NWINFO, _PATH_BEHAVIORINFO):
+            key = path.split("/PRESENTATION", 1)[-1]
+            assert headers_by_path[key] == _ENGLISH_LANG_COOKIE, f"{path}"
+        # The main page keeps the printer's own language for its status strings.
+        assert headers_by_path[_PATH_MAIN.split("/PRESENTATION", 1)[-1]] is None
+
+    @pytest.mark.asyncio
+    async def test_warns_once_when_pages_are_not_english(self, hass, caplog):
+        import logging
+        import os
+
+        from custom_components.epson_workforce.coordinator import (
+            _PATH_MAIN,
+            _PATH_MENTINFO,
+        )
+
+        fixture = os.path.join(
+            os.path.dirname(__file__),
+            "fixtures",
+            "PRESENTATION-ADVANCED-INFO_MENTINFO-TOP-dutch.html",
+        )
+        with open(fixture, encoding="utf-8") as handle:
+            dutch_html = handle.read()
+
+        coordinator = _make_coordinator(hass)
+        responses = {
+            _PATH_MAIN: (200, self._NL_MAIN_HTML),
+            _PATH_MENTINFO: (200, dutch_html),
+        }
+
+        with (
+            patch(
+                "custom_components.epson_workforce.coordinator.async_get_clientsession",
+                return_value=self._mock_session(responses),
+            ),
+            caplog.at_level(logging.WARNING),
+        ):
+            first = await coordinator._async_update_data()
+            await coordinator._async_update_data()
+
+        # The page parsed fine, but its Dutch labels yield no counters.
+        assert first.get("total_pages") is None
+        warnings = [
+            r for r in caplog.records if "expected English labels" in r.getMessage()
+        ]
+        assert len(warnings) == 1, "warning must be logged exactly once"
+
+    @pytest.mark.asyncio
+    async def test_no_warning_when_counters_are_read(self, hass, caplog):
+        import logging
+
+        from custom_components.epson_workforce.coordinator import (
+            _PATH_MAIN,
+            _PATH_MENTINFO,
+        )
+
+        english_html = (
+            '<dl class="values">'
+            '<dt class="key"><span class="key">Total Number of Pages&nbsp;:</span></dt>'
+            '<dd class="value clearfix">'
+            '<div class="preserve-white-space">10</div></dd>'
+            "</dl>"
+        )
+
+        coordinator = _make_coordinator(hass)
+        responses = {
+            _PATH_MAIN: (200, self._NL_MAIN_HTML),
+            _PATH_MENTINFO: (200, english_html),
+        }
+
+        with (
+            patch(
+                "custom_components.epson_workforce.coordinator.async_get_clientsession",
+                return_value=self._mock_session(responses),
+            ),
+            caplog.at_level(logging.WARNING),
+        ):
+            data = await coordinator._async_update_data()
+
+        assert data["total_pages"] == 10
+        assert not [
+            r for r in caplog.records if "expected English labels" in r.getMessage()
+        ]

@@ -33,6 +33,18 @@ _SUPPLEMENTAL = (
 HTTP_NOT_FOUND = 404
 _TIMEOUT = aiohttp.ClientTimeout(total=10)
 
+# Web Config serves its pages in the printer's configured language, but the
+# supplemental pages are parsed by their English labels, so on a non-English
+# printer every lookup misses and the sensors are never created. This cookie is
+# what Web Config's own language selector sets; most models honour it and return
+# English regardless of the printer's own setting.
+#
+# It is sent only for the supplemental pages. The main page needs no English
+# labels (inks are keyed by colour code, the IP and MAC are matched by pattern),
+# and its printer/scanner status strings are user-facing values that should stay
+# in the language the owner configured.
+_ENGLISH_LANG_COOKIE = {"Cookie": "EPSON_COOKIE_LANG=lang_b&1/lang_a&1"}
+
 
 class EpsonCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     """Fetch all data from the Epson printer and expose it as a flat dict."""
@@ -41,6 +53,7 @@ class EpsonCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self.host = host
         self._base_url = f"http://{host}"
         self._supplemental_404: set[str] = set()
+        self._language_warned = False
         super().__init__(
             hass,
             _LOGGER,
@@ -98,12 +111,37 @@ class EpsonCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         )
 
         data = _build_data(raw, sup)
+        self._warn_if_not_english(sup, data)
         _LOGGER.debug(
             "Built %d sensor value(s): %s",
             len([k for k in data if not k.startswith("_")]),
             [k for k in data if not k.startswith("_")],
         )
         return data
+
+    def _warn_if_not_english(self, sup: dict[str, dict], data: dict[str, Any]) -> None:
+        """Warn once when the printer ignored the English-language cookie.
+
+        The usage page parsed fine but not one expected label matched, which
+        means the page came back in another language. Without this the sensors
+        are simply absent with nothing in the log to explain why.
+        """
+        if self._language_warned:
+            return
+        mentinfo = sup.get("mentinfo")
+        if not mentinfo or data.get("total_pages") is not None:
+            return
+        self._language_warned = True
+        _LOGGER.warning(
+            "Printer at %s returned the usage page with %d entries, but none of"
+            " the expected English labels were found, so the usage counters"
+            " cannot be read. This model appears to ignore the language cookie;"
+            " setting Web Config to English enables these sensors. Labels seen:"
+            " %s",
+            self.host,
+            len(mentinfo),
+            ", ".join(sorted(mentinfo)[:5]),
+        )
 
     async def _fetch(self, session: aiohttp.ClientSession, path: str) -> str | None:
         url = self._base_url + path
@@ -135,7 +173,9 @@ class EpsonCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     ) -> tuple[str, dict] | None:
         url = self._base_url + path
         try:
-            async with session.get(url, timeout=_TIMEOUT, ssl=False) as resp:
+            async with session.get(
+                url, timeout=_TIMEOUT, ssl=False, headers=_ENGLISH_LANG_COOKIE
+            ) as resp:
                 if resp.status == HTTP_NOT_FOUND:
                     _LOGGER.debug(
                         "GET %s → 404; this page is not available on this printer"
