@@ -218,6 +218,14 @@ class TestCoordinatorFetch:
         h.data = {}
         return h
 
+    def _patch_sessions(self, session):
+        """Route both session factories to one mock."""
+        return patch.multiple(
+            "custom_components.epson_workforce.coordinator",
+            async_get_clientsession=MagicMock(return_value=session),
+            async_create_clientsession=MagicMock(return_value=session),
+        )
+
     def _mock_session(self, responses: dict[str, tuple[int, str]]):
         """Return a mock aiohttp session where each path maps to (status, html)."""
 
@@ -263,10 +271,7 @@ class TestCoordinatorFetch:
             _PATH_MENTINFO: (404, ""),
         }
 
-        with patch(
-            "custom_components.epson_workforce.coordinator.async_get_clientsession",
-            return_value=self._mock_session(responses),
-        ):
+        with self._patch_sessions(self._mock_session(responses)):
             await coordinator._async_update_data()
 
         assert _PATH_MENTINFO in coordinator._supplemental_404
@@ -282,10 +287,7 @@ class TestCoordinatorFetch:
         responses = {_PATH_MAIN: (503, "")}
 
         with (
-            patch(
-                "custom_components.epson_workforce.coordinator.async_get_clientsession",
-                return_value=self._mock_session(responses),
-            ),
+            self._patch_sessions(self._mock_session(responses)),
             pytest.raises(UpdateFailed),
         ):
             await coordinator._async_update_data()
@@ -318,22 +320,27 @@ class TestCoordinatorFetch:
             }
         )
 
-        with patch(
-            "custom_components.epson_workforce.coordinator.async_get_clientsession",
-            return_value=session,
-        ):
+        with self._patch_sessions(session):
             await coordinator._async_update_data()
 
-        headers_by_path = {
-            call.args[0].split("/PRESENTATION", 1)[-1]: call.kwargs.get("headers")
+        calls = {
+            call.args[0].split("/PRESENTATION", 1)[-1]: (
+                call.args[0],
+                call.kwargs.get("headers"),
+            )
             for call in session.get.call_args_list
         }
-        assert len(headers_by_path) == 4
+        assert len(calls) == 4
         for path in (_PATH_MENTINFO, _PATH_NWINFO, _PATH_BEHAVIORINFO):
-            key = path.split("/PRESENTATION", 1)[-1]
-            assert headers_by_path[key] == _ENGLISH_LANG_COOKIE, f"{path}"
+            url, headers = calls[path.split("/PRESENTATION", 1)[-1]]
+            assert headers == _ENGLISH_LANG_COOKIE, f"{path} needs the cookie"
+            # Requested over HTTPS directly; aiohttp would drop the Cookie
+            # header across the printer's HTTP-to-HTTPS redirect.
+            assert url.startswith("https://"), f"{path} must not rely on a redirect"
         # The main page keeps the printer's own language for its status strings.
-        assert headers_by_path[_PATH_MAIN.split("/PRESENTATION", 1)[-1]] is None
+        main_url, main_headers = calls[_PATH_MAIN.split("/PRESENTATION", 1)[-1]]
+        assert main_headers is None
+        assert main_url.startswith("http://")
 
     @pytest.mark.asyncio
     async def test_warns_once_when_pages_are_not_english(self, hass, caplog):
@@ -360,10 +367,7 @@ class TestCoordinatorFetch:
         }
 
         with (
-            patch(
-                "custom_components.epson_workforce.coordinator.async_get_clientsession",
-                return_value=self._mock_session(responses),
-            ),
+            self._patch_sessions(self._mock_session(responses)),
             caplog.at_level(logging.WARNING),
         ):
             first = await coordinator._async_update_data()
@@ -400,10 +404,7 @@ class TestCoordinatorFetch:
         }
 
         with (
-            patch(
-                "custom_components.epson_workforce.coordinator.async_get_clientsession",
-                return_value=self._mock_session(responses),
-            ),
+            self._patch_sessions(self._mock_session(responses)),
             caplog.at_level(logging.WARNING),
         ):
             data = await coordinator._async_update_data()

@@ -10,7 +10,10 @@ from typing import Any
 
 import aiohttp
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers.aiohttp_client import async_get_clientsession
+from homeassistant.helpers.aiohttp_client import (
+    async_create_clientsession,
+    async_get_clientsession,
+)
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
 from .parser import EpsonHTMLParser
@@ -43,7 +46,19 @@ _TIMEOUT = aiohttp.ClientTimeout(total=10)
 # labels (inks are keyed by colour code, the IP and MAC are matched by pattern),
 # and its printer/scanner status strings are user-facing values that should stay
 # in the language the owner configured.
+#
+# Two things this has to work around, both measured on an XP-4200:
+#  * These printers answer HTTP with a 307 to HTTPS, and aiohttp drops the Cookie
+#    header across that redirect, so the supplemental pages are requested over
+#    HTTPS directly. The plain-HTTP base URL is kept as a fallback for models
+#    that do not serve TLS.
+#  * aiohttp lets a cookie jar override an explicit Cookie header, so these
+#    requests use a session with no jar. Otherwise a stray EPSON_COOKIE_LANG in
+#    Home Assistant's shared jar would silently undo this.
 _ENGLISH_LANG_COOKIE = {"Cookie": "EPSON_COOKIE_LANG=lang_b&1/lang_a&1"}
+
+# Sentinel: this URL failed to connect, try the next one.
+_RETRY_NEXT_URL = object()
 
 
 class EpsonCoordinator(DataUpdateCoordinator[dict[str, Any]]):
@@ -54,6 +69,7 @@ class EpsonCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self._base_url = f"http://{host}"
         self._supplemental_404: set[str] = set()
         self._language_warned = False
+        self._no_jar_session: aiohttp.ClientSession | None = None
         super().__init__(
             hass,
             _LOGGER,
@@ -94,7 +110,7 @@ class EpsonCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             )
         sup_results = await asyncio.gather(
             *[
-                self._fetch_supplemental(session, key, path, page_parser)
+                self._fetch_supplemental(key, path, page_parser)
                 for key, path, page_parser in pending
             ],
             return_exceptions=False,
@@ -164,16 +180,46 @@ class EpsonCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             _LOGGER.debug("GET %s → unexpected error: %s", url, exc)
             return None
 
+    def _jarless_session(self) -> aiohttp.ClientSession:
+        """Session for the supplemental pages, created on first use.
+
+        It deliberately keeps no cookie jar: aiohttp lets a jar override an
+        explicit Cookie header, which would silently undo the language cookie.
+        """
+        if self._no_jar_session is None:
+            self._no_jar_session = async_create_clientsession(
+                self.hass, cookie_jar=aiohttp.DummyCookieJar()
+            )
+        return self._no_jar_session
+
     async def _fetch_supplemental(
         self,
-        session: aiohttp.ClientSession,
         key: str,
         path: str,
         page_parser: Any,
     ) -> tuple[str, dict] | None:
-        url = self._base_url + path
+        urls = [f"https://{self.host}{path}"]
+        if not self._base_url.startswith("https://"):
+            urls.append(self._base_url + path)
+
+        for attempt, url in enumerate(urls):
+            last_attempt = attempt + 1 == len(urls)
+            result = await self._get_supplemental(url, key, path, page_parser)
+            if result is not _RETRY_NEXT_URL:
+                return result
+            if last_attempt:
+                return None
+        return None
+
+    async def _get_supplemental(
+        self,
+        url: str,
+        key: str,
+        path: str,
+        page_parser: Any,
+    ) -> tuple[str, dict] | None | object:
         try:
-            async with session.get(
+            async with self._jarless_session().get(
                 url, timeout=_TIMEOUT, ssl=False, headers=_ENGLISH_LANG_COOKIE
             ) as resp:
                 if resp.status == HTTP_NOT_FOUND:
@@ -201,16 +247,16 @@ class EpsonCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     "GET %s → HTTP %d (transient, will retry)", url, exc.status
                 )
             return None
-        except aiohttp.ClientConnectorError as exc:
-            _LOGGER.debug("GET %s → connection error (transient): %s", url, exc)
-            return None
+        except aiohttp.ClientConnectionError as exc:
+            _LOGGER.debug("GET %s → connection error: %s", url, exc)
+            return _RETRY_NEXT_URL
         except TimeoutError:
             _LOGGER.debug(
-                "GET %s → timed out after %ss (transient, will retry)",
+                "GET %s → timed out after %ss",
                 url,
                 _TIMEOUT.total,
             )
-            return None
+            return _RETRY_NEXT_URL
         except Exception as exc:
             _LOGGER.debug("GET %s → unexpected error (transient): %s", url, exc)
             return None
