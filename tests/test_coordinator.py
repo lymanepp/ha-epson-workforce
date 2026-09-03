@@ -93,6 +93,9 @@ def _sup(overrides=None):
         },
         "nwinfo": {
             "Connection Status": "Wi-Fi-433Mbps",
+            "Signal Strength": "Excellent",
+            "SSID": "CHAOS PRIVATE",
+            "Connection Method": "Not Set",
             "Channel": "44",
             "Wi-Fi Mode": "IEEE 802.11 a/n/ac",
             "Security Level": "WPA3-SAE(AES)",
@@ -145,6 +148,18 @@ class TestBuildData:
     def test_network_fields(self):
         data = _build_data(_raw(), {})
         assert data["ip_address"] == "10.0.1.116"
+        assert data["signal_strength"] == "Excellent"
+        assert data["ssid"] == "CHAOS PRIVATE"
+        assert data["wifi_direct_connection_method"] == "Not Set"
+
+    def test_network_fields_fall_back_to_english_supplemental_page(self):
+        raw = _raw(
+            {
+                "network": {"Signaalsterkte": "Uitstekend", "SSID": "CHAOS PRIVATE"},
+                "wifi_direct": {"Verbindingsmethode": "Niet ingesteld"},
+            }
+        )
+        data = _build_data(raw, _sup())
         assert data["signal_strength"] == "Excellent"
         assert data["ssid"] == "CHAOS PRIVATE"
         assert data["wifi_direct_connection_method"] == "Not Set"
@@ -219,11 +234,10 @@ class TestCoordinatorFetch:
         return h
 
     def _patch_sessions(self, session):
-        """Route both session factories to one mock."""
-        return patch.multiple(
-            "custom_components.epson_workforce.coordinator",
-            async_get_clientsession=MagicMock(return_value=session),
-            async_create_clientsession=MagicMock(return_value=session),
+        """Route the dedicated Web Config session factory to one mock."""
+        return patch(
+            "custom_components.epson_workforce.coordinator.async_create_clientsession",
+            return_value=session,
         )
 
     def _mock_session(self, responses: dict[str, tuple[int, str]]):
@@ -340,7 +354,57 @@ class TestCoordinatorFetch:
         # The main page keeps the printer's own language for its status strings.
         main_url, main_headers = calls[_PATH_MAIN.split("/PRESENTATION", 1)[-1]]
         assert main_headers is None
-        assert main_url.startswith("http://")
+        assert main_url.startswith("https://")
+
+    @pytest.mark.asyncio
+    async def test_http_fallback_is_remembered(self, hass):
+        from custom_components.epson_workforce.coordinator import (
+            _PATH_BEHAVIORINFO,
+            _PATH_MAIN,
+            _PATH_MENTINFO,
+            _PATH_NWINFO,
+        )
+
+        coordinator = _make_coordinator(hass)
+        calls = []
+
+        def fake_get(url, **kwargs):
+            calls.append(url)
+            if url.startswith("https://"):
+                raise aiohttp.ClientConnectionError("TLS unavailable")
+
+            resp = MagicMock()
+            if url.endswith(_PATH_MAIN):
+                resp.status = 200
+                resp.raise_for_status = MagicMock()
+                resp.text = AsyncMock(return_value=self._NL_MAIN_HTML)
+            elif url.endswith((_PATH_MENTINFO, _PATH_NWINFO, _PATH_BEHAVIORINFO)):
+                resp.status = 404
+                resp.raise_for_status.side_effect = aiohttp.ClientResponseError(
+                    MagicMock(), MagicMock(), status=404
+                )
+                resp.text = AsyncMock(return_value="")
+            else:
+                raise AssertionError(f"Unexpected URL: {url}")
+
+            cm = MagicMock()
+            cm.__aenter__ = AsyncMock(return_value=resp)
+            cm.__aexit__ = AsyncMock(return_value=False)
+            return cm
+
+        session = MagicMock()
+        session.get = MagicMock(side_effect=fake_get)
+
+        with self._patch_sessions(session):
+            await coordinator._async_update_data()
+            first_poll = list(calls)
+            calls.clear()
+            await coordinator._async_update_data()
+
+        assert first_poll[0].startswith("https://")
+        assert any(url.startswith("http://") for url in first_poll)
+        assert coordinator._base_url == "http://10.0.1.116"
+        assert calls == ["http://10.0.1.116" + _PATH_MAIN]
 
     @pytest.mark.asyncio
     async def test_warns_once_when_pages_are_not_english(self, hass, caplog):
@@ -410,6 +474,44 @@ class TestCoordinatorFetch:
             data = await coordinator._async_update_data()
 
         assert data["total_pages"] == 10
+        assert not [
+            r for r in caplog.records if "expected English labels" in r.getMessage()
+        ]
+
+    @pytest.mark.asyncio
+    async def test_no_warning_when_any_expected_english_label_is_present(
+        self, hass, caplog
+    ):
+        import logging
+
+        from custom_components.epson_workforce.coordinator import (
+            _PATH_MAIN,
+            _PATH_MENTINFO,
+        )
+
+        # Total Number of Pages is deliberately absent. The old warning predicate
+        # treated that as proof that *no* English labels had matched.
+        english_html = (
+            '<dl class="values">'
+            '<dt class="key"><span class="key">B&amp;W Copy&nbsp;:</span></dt>'
+            '<dd class="value clearfix">'
+            '<div class="preserve-white-space">5</div></dd>'
+            "</dl>"
+        )
+        coordinator = _make_coordinator(hass)
+        responses = {
+            _PATH_MAIN: (200, self._NL_MAIN_HTML),
+            _PATH_MENTINFO: (200, english_html),
+        }
+
+        with (
+            self._patch_sessions(self._mock_session(responses)),
+            caplog.at_level(logging.WARNING),
+        ):
+            data = await coordinator._async_update_data()
+
+        assert data["bw_copies"] == 5
+        assert "total_pages" not in data
         assert not [
             r for r in caplog.records if "expected English labels" in r.getMessage()
         ]
