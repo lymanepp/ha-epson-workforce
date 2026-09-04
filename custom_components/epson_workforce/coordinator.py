@@ -10,7 +10,7 @@ from typing import Any
 
 import aiohttp
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers.aiohttp_client import async_get_clientsession
+from homeassistant.helpers.aiohttp_client import async_create_clientsession
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
 from .parser import EpsonHTMLParser
@@ -33,14 +33,55 @@ _SUPPLEMENTAL = (
 HTTP_NOT_FOUND = 404
 _TIMEOUT = aiohttp.ClientTimeout(total=10)
 
+# Web Config serves its pages in the printer's configured language, but the
+# supplemental pages are parsed by their English labels, so on a non-English
+# printer every lookup misses and the sensors are never created. This cookie is
+# what Web Config's own language selector sets; most models honour it and return
+# English regardless of the printer's own setting.
+#
+# It is sent only for the supplemental pages. The main page contains user-facing
+# printer/scanner status strings that should stay in the language the owner
+# configured. Any fields on that page that are keyed by English display labels
+# can fall back to the forced-English supplemental network page.
+#
+# Two things this has to work around, both measured on an XP-4200:
+#  * These printers answer HTTP with a 307 to HTTPS, and aiohttp drops the Cookie
+#    header across that redirect, so the supplemental pages are requested over
+#    HTTPS directly. The plain-HTTP base URL is kept as a fallback for models
+#    that do not serve TLS.
+#  * aiohttp lets a cookie jar override an explicit Cookie header, so these
+#    requests use a session with no jar. Otherwise a stray EPSON_COOKIE_LANG in
+#    Home Assistant's shared jar would silently undo this.
+_ENGLISH_LANG_COOKIE = {"Cookie": "EPSON_COOKIE_LANG=lang_b&1/lang_a&1"}
+
+_MENTINFO_ENGLISH_KEYS = frozenset(
+    {
+        "Total Number of Pages",
+        "Total Number of B&W Pages",
+        "Total Number of Color Pages",
+        "B&W Copy",
+        "Color Copy",
+        "B&W Scan",
+        "Color Scan",
+        "First Printing Date",
+    }
+)
+
 
 class EpsonCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     """Fetch all data from the Epson printer and expose it as a flat dict."""
 
     def __init__(self, hass: HomeAssistant, host: str) -> None:
         self.host = host
-        self._base_url = f"http://{host}"
+        # Probe HTTPS first. Some Epson models redirect HTTP to HTTPS, which is
+        # harmless for the localized main page but would drop the explicit
+        # language cookie on supplemental requests. Once a working scheme is
+        # found, remember it so HTTP-only models are not forced through a failed
+        # HTTPS attempt on every poll.
+        self._base_url = f"https://{host}"
         self._supplemental_404: set[str] = set()
+        self._language_warned = False
+        self._web_config_session: aiohttp.ClientSession | None = None
         super().__init__(
             hass,
             _LOGGER,
@@ -49,11 +90,9 @@ class EpsonCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         )
 
     async def _async_update_data(self) -> dict[str, Any]:
-        session = async_get_clientsession(self.hass)
-
         # Fetch the main page — failure is fatal for this cycle.
         _LOGGER.debug("Fetching main status page from %s", self._base_url)
-        main_html = await self._fetch(session, _PATH_MAIN)
+        main_html = await self._fetch(_PATH_MAIN)
         if main_html is None:
             raise UpdateFailed(f"Cannot reach printer at {self._base_url}")  # noqa: TRY003
 
@@ -81,7 +120,7 @@ class EpsonCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             )
         sup_results = await asyncio.gather(
             *[
-                self._fetch_supplemental(session, key, path, page_parser)
+                self._fetch_supplemental(key, path, page_parser)
                 for key, path, page_parser in pending
             ],
             return_exceptions=False,
@@ -98,6 +137,7 @@ class EpsonCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         )
 
         data = _build_data(raw, sup)
+        self._warn_if_not_english(sup)
         _LOGGER.debug(
             "Built %d sensor value(s): %s",
             len([k for k in data if not k.startswith("_")]),
@@ -105,37 +145,96 @@ class EpsonCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         )
         return data
 
-    async def _fetch(self, session: aiohttp.ClientSession, path: str) -> str | None:
-        url = self._base_url + path
-        try:
-            async with session.get(url, timeout=_TIMEOUT, ssl=False) as resp:
-                resp.raise_for_status()
-                html = await resp.text(encoding="utf-8", errors="ignore")
-                _LOGGER.debug("GET %s → %d (%d bytes)", url, resp.status, len(html))
-                return html
-        except aiohttp.ClientResponseError as exc:
-            _LOGGER.debug("GET %s → HTTP %d", url, exc.status)
-            return None
-        except aiohttp.ClientConnectorError as exc:
-            _LOGGER.debug("GET %s → connection error: %s", url, exc)
-            return None
-        except TimeoutError:
-            _LOGGER.debug("GET %s → timed out after %ss", url, _TIMEOUT.total)
-            return None
-        except Exception as exc:
-            _LOGGER.debug("GET %s → unexpected error: %s", url, exc)
-            return None
+    def _warn_if_not_english(self, sup: dict[str, dict]) -> None:
+        """Warn once when the usage page has no recognized English labels.
+
+        A localized page is the usual cause, although a model with a different
+        page schema can look the same. Without this the sensors are simply absent
+        with nothing in the log to explain why.
+        """
+        if self._language_warned:
+            return
+        mentinfo = sup.get("mentinfo")
+        if not mentinfo or _MENTINFO_ENGLISH_KEYS.intersection(mentinfo):
+            return
+        self._language_warned = True
+        _LOGGER.warning(
+            "Printer at %s returned the usage page with %d entries, but none of"
+            " the expected English labels were found, so the usage counters"
+            " cannot be read. The printer may be ignoring the language cookie or"
+            " using a different page schema. If Web Config is not already set to"
+            " English, setting it to English may enable these sensors. Labels"
+            " seen: %s",
+            self.host,
+            len(mentinfo),
+            ", ".join(sorted(mentinfo)[:5]),
+        )
+
+    def _session(self) -> aiohttp.ClientSession:
+        """Return the dedicated Web Config session, creating it on first use.
+
+        It deliberately keeps no cookie jar: aiohttp lets a jar override an
+        explicit Cookie header. Using the same isolated session for the main page
+        also prevents a stale shared-session language cookie from changing the
+        localized status strings we intentionally preserve.
+        """
+        if self._web_config_session is None:
+            self._web_config_session = async_create_clientsession(
+                self.hass, cookie_jar=aiohttp.DummyCookieJar()
+            )
+        return self._web_config_session
+
+    async def _fetch(self, path: str) -> str | None:
+        """Fetch the localized main page and remember the working scheme."""
+        base_urls = [self._base_url]
+        if self._base_url.startswith("https://"):
+            base_urls.append(f"http://{self.host}")
+
+        for index, base_url in enumerate(base_urls):
+            url = base_url + path
+            try:
+                async with self._session().get(
+                    url, timeout=_TIMEOUT, ssl=False
+                ) as resp:
+                    resp.raise_for_status()
+                    html = await resp.text(encoding="utf-8", errors="ignore")
+                    self._base_url = base_url
+                    _LOGGER.debug("GET %s → %d (%d bytes)", url, resp.status, len(html))
+                    return html
+            except aiohttp.ClientResponseError as exc:
+                _LOGGER.debug("GET %s → HTTP %d", url, exc.status)
+                return None
+            except (aiohttp.ClientConnectionError, TimeoutError) as exc:
+                if index + 1 < len(base_urls):
+                    _LOGGER.debug(
+                        "GET %s → connection failed (%s); trying HTTP", url, exc
+                    )
+                    continue
+                if isinstance(exc, TimeoutError):
+                    _LOGGER.debug("GET %s → timed out after %ss", url, _TIMEOUT.total)
+                else:
+                    _LOGGER.debug("GET %s → connection error: %s", url, exc)
+                return None
+            except Exception as exc:
+                _LOGGER.debug("GET %s → unexpected error: %s", url, exc)
+                return None
+
+        return None
 
     async def _fetch_supplemental(
         self,
-        session: aiohttp.ClientSession,
         key: str,
         path: str,
         page_parser: Any,
     ) -> tuple[str, dict] | None:
+        # The main-page fetch has already discovered and cached a working scheme,
+        # so supplemental requests can use it directly without probing a known-
+        # dead HTTPS endpoint on every update.
         url = self._base_url + path
         try:
-            async with session.get(url, timeout=_TIMEOUT, ssl=False) as resp:
+            async with self._session().get(
+                url, timeout=_TIMEOUT, ssl=False, headers=_ENGLISH_LANG_COOKIE
+            ) as resp:
                 if resp.status == HTTP_NOT_FOUND:
                     _LOGGER.debug(
                         "GET %s → 404; this page is not available on this printer"
@@ -161,7 +260,7 @@ class EpsonCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     "GET %s → HTTP %d (transient, will retry)", url, exc.status
                 )
             return None
-        except aiohttp.ClientConnectorError as exc:
+        except aiohttp.ClientConnectionError as exc:
             _LOGGER.debug("GET %s → connection error (transient): %s", url, exc)
             return None
         except TimeoutError:
@@ -218,9 +317,13 @@ def _build_data(raw: dict[str, Any], sup: dict[str, dict]) -> dict[str, Any]:
         "fax_status": behaviorinfo.get("Fax"),
         # Network (main page)
         "ip_address": raw.get("ip_address"),
-        "signal_strength": network.get("Signal Strength") or None,
-        "ssid": network.get("SSID") or None,
-        "wifi_direct_connection_method": wifi_direct.get("Connection Method") or None,
+        "signal_strength": network.get("Signal Strength")
+        or nwinfo.get("Signal Strength")
+        or None,
+        "ssid": network.get("SSID") or nwinfo.get("SSID") or None,
+        "wifi_direct_connection_method": wifi_direct.get("Connection Method")
+        or nwinfo.get("Connection Method")
+        or None,
         # Page counters
         "total_pages": _to_int(mentinfo.get("Total Number of Pages")),
         "bw_pages": _to_int(mentinfo.get("Total Number of B&W Pages")),
