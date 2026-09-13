@@ -112,9 +112,7 @@ async def async_probe_printer(
                     final_scheme = scheme
                 base_url = f"{final_scheme}://{host}"
 
-                raw = EpsonHTMLParser(
-                    html, source=base_url + _PATH_MAIN
-                ).parse()
+                raw = EpsonHTMLParser(html, source=base_url + _PATH_MAIN).parse()
                 if not _looks_like_main_page(raw):
                     _LOGGER.debug(
                         "GET %s → %d (%d bytes), but response is not an Epson "
@@ -168,14 +166,10 @@ class EpsonCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
     async def _async_update_data(self) -> dict[str, Any]:
         # Fetch the main page — failure is fatal for this cycle.
-        _LOGGER.debug(
-            "Fetching main status page from %s", self._base_url or self.host
-        )
+        _LOGGER.debug("Fetching main status page from %s", self._base_url or self.host)
         raw = await self._fetch_main()
         if raw is None or self._base_url is None:
-            raise UpdateFailed(
-                f"Cannot reach printer at {self.host} over HTTP or HTTPS"
-            )  # noqa: TRY003
+            raise UpdateFailed(f"Cannot reach printer at {self.host}")  # noqa: TRY003
         _LOGGER.debug(
             "Main page parsed: model=%s status=%s inks=%s",
             raw.get("model"),
@@ -283,7 +277,7 @@ class EpsonCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self._base_url = base_url
         return raw
 
-    async def _fetch_supplemental(
+    async def _fetch_supplemental(  # noqa: PLR0911
         self,
         key: str,
         path: str,
