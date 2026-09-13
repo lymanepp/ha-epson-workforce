@@ -107,9 +107,12 @@ async def async_probe_printer(
                     continue
 
                 html = await resp.text(encoding="utf-8", errors="ignore")
-                final_scheme = getattr(getattr(resp, "url", None), "scheme", None)
+                final_scheme = resp.url.scheme
                 if final_scheme not in _PROTOCOLS:
-                    final_scheme = scheme
+                    _LOGGER.debug(
+                        "GET %s → unsupported final scheme %s", url, final_scheme
+                    )
+                    continue
                 base_url = f"{final_scheme}://{host}"
 
                 raw = EpsonHTMLParser(html, source=base_url + _PATH_MAIN).parse()
@@ -131,15 +134,10 @@ async def async_probe_printer(
                     base_url,
                 )
                 return base_url, raw
-        except aiohttp.ClientResponseError as exc:
-            _LOGGER.debug("GET %s → HTTP %d", url, exc.status)
-        except (aiohttp.ClientConnectionError, TimeoutError) as exc:
-            if isinstance(exc, TimeoutError):
-                _LOGGER.debug("GET %s → timed out after %ss", url, timeout.total)
-            else:
-                _LOGGER.debug("GET %s → connection error: %s", url, exc)
-        except Exception as exc:
-            _LOGGER.debug("GET %s → unexpected error: %s", url, exc)
+        except TimeoutError:
+            _LOGGER.debug("GET %s → timed out after %ss", url, timeout.total)
+        except aiohttp.ClientError as exc:
+            _LOGGER.debug("GET %s → request error: %s", url, exc)
 
     return None
 
@@ -149,11 +147,11 @@ class EpsonCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
     def __init__(self, hass: HomeAssistant, host: str) -> None:
         self.host = host
-        # The working Web Config scheme is discovered on the first update and
-        # cached. HTTP is tried first; if it redirects to HTTPS, the final scheme
-        # is captured so supplemental requests can go directly to HTTPS without
-        # losing the explicit language cookie across a redirect.
-        self._base_url: str | None = None
+        # Start with HTTP; _fetch_main validates it, follows redirects, and falls
+        # back to HTTPS when needed. The working scheme is then cached so
+        # supplemental requests can use it directly without losing the explicit
+        # language cookie across a redirect.
+        self._base_url = f"http://{host}"
         self._supplemental_404: set[str] = set()
         self._language_warned = False
         self._web_config_session: aiohttp.ClientSession | None = None
@@ -166,10 +164,12 @@ class EpsonCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
     async def _async_update_data(self) -> dict[str, Any]:
         # Fetch the main page — failure is fatal for this cycle.
-        _LOGGER.debug("Fetching main status page from %s", self._base_url or self.host)
+        _LOGGER.debug("Fetching main status page from %s", self._base_url)
         raw = await self._fetch_main()
-        if raw is None or self._base_url is None:
-            raise UpdateFailed(f"Cannot reach printer at {self.host}")  # noqa: TRY003
+        if raw is None:
+            raise UpdateFailed(  # noqa: TRY003
+                f"Cannot reach printer at {self.host} over HTTP or HTTPS"
+            )
         _LOGGER.debug(
             "Main page parsed: model=%s status=%s inks=%s",
             raw.get("model"),
@@ -258,12 +258,9 @@ class EpsonCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
     async def _fetch_main(self) -> dict[str, Any] | None:
         """Fetch and parse the main page, caching the working scheme."""
-        if self._base_url is None:
-            schemes = _PROTOCOLS
-        else:
-            cached_scheme = self._base_url.split(":", 1)[0]
-            alternate = "https" if cached_scheme == "http" else "http"
-            schemes = (cached_scheme, alternate)
+        cached_scheme = self._base_url.split(":", 1)[0]
+        alternate = "https" if cached_scheme == "http" else "http"
+        schemes = (cached_scheme, alternate)
 
         result = await async_probe_printer(
             self._session(), self.host, schemes=schemes, timeout=_TIMEOUT
@@ -277,7 +274,7 @@ class EpsonCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self._base_url = base_url
         return raw
 
-    async def _fetch_supplemental(  # noqa: PLR0911
+    async def _fetch_supplemental(
         self,
         key: str,
         path: str,
@@ -286,8 +283,6 @@ class EpsonCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         # The main-page fetch has already discovered and cached a working scheme,
         # so supplemental requests can use it directly without probing a known-
         # dead HTTPS endpoint on every update.
-        if self._base_url is None:
-            return None
         url = self._base_url + path
         try:
             async with self._session().get(

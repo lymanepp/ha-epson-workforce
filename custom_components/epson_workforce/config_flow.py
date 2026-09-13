@@ -25,11 +25,8 @@ class EpsonConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):  # type: ignore
 
         if user_input is not None:
             host = user_input[CONF_HOST].strip()
-            try:
-                session = async_get_clientsession(self.hass)
-                if await async_probe_printer(session, host, timeout=_TIMEOUT) is None:
-                    errors["base"] = "cannot_connect"
-            except Exception:
+            session = async_get_clientsession(self.hass)
+            if await async_probe_printer(session, host, timeout=_TIMEOUT) is None:
                 errors["base"] = "cannot_connect"
 
             if not errors:

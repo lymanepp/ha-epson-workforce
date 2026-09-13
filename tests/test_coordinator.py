@@ -11,9 +11,11 @@ import pytest
 from custom_components.epson_workforce.coordinator import (
     EpsonCoordinator,
     _build_data,
+    _looks_like_main_page,
     _parse_wifi_speed,
     _to_int,
 )
+from custom_components.epson_workforce.parser import EpsonHTMLParser
 
 # ---------------------------------------------------------------------------
 # _to_int
@@ -239,22 +241,12 @@ class TestMainPageValidation:
         ],
     )
     def test_known_main_pages_are_recognized(self, filename):
-        from custom_components.epson_workforce.coordinator import (
-            _looks_like_main_page,
-        )
-        from custom_components.epson_workforce.parser import EpsonHTMLParser
-
         html = (Path(__file__).parent / "fixtures" / filename).read_text(
             encoding="utf-8"
         )
         assert _looks_like_main_page(EpsonHTMLParser(html).parse())
 
     def test_generic_page_is_rejected(self):
-        from custom_components.epson_workforce.coordinator import (
-            _looks_like_main_page,
-        )
-        from custom_components.epson_workforce.parser import EpsonHTMLParser
-
         html = "<html><title>Default Page</title><body>Welcome</body></html>"
         assert not _looks_like_main_page(EpsonHTMLParser(html).parse())
 
@@ -282,37 +274,36 @@ class TestCoordinatorFetch:
             return_value=session,
         )
 
-    def _mock_session(
-        self,
-        responses: dict[str, tuple[int, str] | tuple[int, str, str]],
-    ):
-        """Return a mock session mapping each path to status, HTML, and final scheme."""
+    def _mock_session(self, responses):
+        """Return a mock session with optional per-scheme responses."""
+        missing = object()
 
         def fake_get(url, **kwargs):
-            for path, response in responses.items():
-                if url.endswith(path):
-                    status, html, *optional_scheme = response
-                    final_scheme = (
-                        optional_scheme[0]
-                        if optional_scheme
-                        else url.split(":", 1)[0]
-                    )
-                    resp = MagicMock()
-                    resp.status = status
-                    resp.url = MagicMock()
-                    resp.url.scheme = final_scheme
-                    if status != 200:
-                        resp.raise_for_status.side_effect = aiohttp.ClientResponseError(
-                            MagicMock(), MagicMock(), status=status
-                        )
-                    else:
-                        resp.raise_for_status = MagicMock()
-                    resp.text = AsyncMock(return_value=html)
-                    cm = MagicMock()
-                    cm.__aenter__ = AsyncMock(return_value=resp)
-                    cm.__aexit__ = AsyncMock(return_value=False)
-                    return cm
-            raise Exception(f"Unexpected URL: {url}")
+            scheme = url.split(":", 1)[0]
+            path = "/" + url.split("/", 3)[3]
+            response = responses.get((scheme, path), responses.get(path, missing))
+            if response is missing:
+                raise AssertionError(f"Unexpected URL: {url}")
+            if isinstance(response, Exception):
+                raise response
+
+            status, html, *final_scheme_override = response
+            final_scheme = final_scheme_override[0] if final_scheme_override else scheme
+            resp = MagicMock()
+            resp.status = status
+            resp.url = MagicMock()
+            resp.url.scheme = final_scheme
+            if status != 200:
+                resp.raise_for_status.side_effect = aiohttp.ClientResponseError(
+                    MagicMock(), MagicMock(), status=status
+                )
+            else:
+                resp.raise_for_status = MagicMock()
+            resp.text = AsyncMock(return_value=html)
+            cm = MagicMock()
+            cm.__aenter__ = AsyncMock(return_value=resp)
+            cm.__aexit__ = AsyncMock(return_value=False)
+            return cm
 
         session = MagicMock()
         session.get = MagicMock(side_effect=fake_get)
@@ -411,7 +402,7 @@ class TestCoordinatorFetch:
         assert coordinator._base_url == "https://10.0.1.116"
 
     @pytest.mark.asyncio
-    async def test_http_is_discovered_and_remembered(self, hass):
+    async def test_http_is_used_when_https_serves_default_page(self, hass):
         from custom_components.epson_workforce.coordinator import (
             _PATH_BEHAVIORINFO,
             _PATH_MAIN,
@@ -420,49 +411,50 @@ class TestCoordinatorFetch:
         )
 
         coordinator = _make_coordinator(hass)
-        calls = []
-
-        def fake_get(url, **kwargs):
-            calls.append(url)
-            if url.startswith("https://"):
-                raise AssertionError("HTTPS should not be probed when HTTP works")
-
-            resp = MagicMock()
-            resp.url = MagicMock()
-            resp.url.scheme = "http"
-            if url.endswith(_PATH_MAIN):
-                resp.status = 200
-                resp.raise_for_status = MagicMock()
-                resp.text = AsyncMock(return_value=self._NL_MAIN_HTML)
-            elif url.endswith((_PATH_MENTINFO, _PATH_NWINFO, _PATH_BEHAVIORINFO)):
-                resp.status = 404
-                resp.raise_for_status.side_effect = aiohttp.ClientResponseError(
-                    MagicMock(), MagicMock(), status=404
-                )
-                resp.text = AsyncMock(return_value="")
-            else:
-                raise AssertionError(f"Unexpected URL: {url}")
-
-            cm = MagicMock()
-            cm.__aenter__ = AsyncMock(return_value=resp)
-            cm.__aexit__ = AsyncMock(return_value=False)
-            return cm
-
-        session = MagicMock()
-        session.get = MagicMock(side_effect=fake_get)
+        session = self._mock_session(
+            {
+                ("http", _PATH_MAIN): (200, self._NL_MAIN_HTML),
+                ("https", _PATH_MAIN): (
+                    200,
+                    "<html><title>Default Page</title><body>Welcome</body></html>",
+                ),
+                _PATH_MENTINFO: (404, ""),
+                _PATH_NWINFO: (404, ""),
+                _PATH_BEHAVIORINFO: (404, ""),
+            }
+        )
 
         with self._patch_sessions(session):
             await coordinator._async_update_data()
-            first_poll = list(calls)
-            calls.clear()
+            first_poll = [call.args[0] for call in session.get.call_args_list]
+            session.get.reset_mock()
             await coordinator._async_update_data()
 
         assert all(url.startswith("http://") for url in first_poll)
         assert coordinator._base_url == "http://10.0.1.116"
-        assert calls == ["http://10.0.1.116" + _PATH_MAIN]
+        assert [call.args[0] for call in session.get.call_args_list] == [
+            "http://10.0.1.116" + _PATH_MAIN
+        ]
 
     @pytest.mark.asyncio
-    async def test_https_used_when_http_connection_fails(self, hass):
+    @pytest.mark.parametrize(
+        "http_response",
+        [
+            pytest.param(
+                aiohttp.ClientConnectionError("HTTP unavailable"),
+                id="connection-error",
+            ),
+            pytest.param((503, ""), id="http-error"),
+            pytest.param(
+                (
+                    200,
+                    "<html><title>Default Page</title><body>Welcome</body></html>",
+                ),
+                id="invalid-page",
+            ),
+        ],
+    )
+    async def test_http_probe_failure_falls_back_to_https(self, hass, http_response):
         from custom_components.epson_workforce.coordinator import (
             _PATH_BEHAVIORINFO,
             _PATH_MAIN,
@@ -471,94 +463,57 @@ class TestCoordinatorFetch:
         )
 
         coordinator = _make_coordinator(hass)
-        calls = []
-
-        def fake_get(url, **kwargs):
-            calls.append(url)
-            if url.startswith("http://") and url.endswith(_PATH_MAIN):
-                raise aiohttp.ClientConnectionError("HTTP unavailable")
-
-            resp = MagicMock()
-            resp.url = MagicMock()
-            resp.url.scheme = "https"
-            if url.endswith(_PATH_MAIN):
-                resp.status = 200
-                resp.raise_for_status = MagicMock()
-                resp.text = AsyncMock(return_value=self._NL_MAIN_HTML)
-            elif url.endswith((_PATH_MENTINFO, _PATH_NWINFO, _PATH_BEHAVIORINFO)):
-                resp.status = 404
-                resp.raise_for_status.side_effect = aiohttp.ClientResponseError(
-                    MagicMock(), MagicMock(), status=404
-                )
-                resp.text = AsyncMock(return_value="")
-            else:
-                raise AssertionError(f"Unexpected URL: {url}")
-
-            cm = MagicMock()
-            cm.__aenter__ = AsyncMock(return_value=resp)
-            cm.__aexit__ = AsyncMock(return_value=False)
-            return cm
-
-        session = MagicMock()
-        session.get = MagicMock(side_effect=fake_get)
-
-        with self._patch_sessions(session):
-            await coordinator._async_update_data()
-
-        assert calls[0] == "http://10.0.1.116" + _PATH_MAIN
-        assert calls[1] == "https://10.0.1.116" + _PATH_MAIN
-        assert coordinator._base_url == "https://10.0.1.116"
-
-    @pytest.mark.asyncio
-    async def test_invalid_http_page_falls_back_to_valid_https(self, hass):
-        from custom_components.epson_workforce.coordinator import (
-            _PATH_BEHAVIORINFO,
-            _PATH_MAIN,
-            _PATH_MENTINFO,
-            _PATH_NWINFO,
+        session = self._mock_session(
+            {
+                ("http", _PATH_MAIN): http_response,
+                ("https", _PATH_MAIN): (200, self._NL_MAIN_HTML),
+                _PATH_MENTINFO: (404, ""),
+                _PATH_NWINFO: (404, ""),
+                _PATH_BEHAVIORINFO: (404, ""),
+            }
         )
 
-        coordinator = _make_coordinator(hass)
-        calls = []
-
-        def fake_get(url, **kwargs):
-            calls.append(url)
-            resp = MagicMock()
-            resp.status = 200
-            resp.url = MagicMock()
-            resp.url.scheme = url.split(":", 1)[0]
-            resp.raise_for_status = MagicMock()
-            if url.startswith("http://") and url.endswith(_PATH_MAIN):
-                resp.text = AsyncMock(
-                    return_value="<html><title>Default Page</title><body>Welcome</body></html>"
-                )
-            elif url.endswith(_PATH_MAIN):
-                resp.text = AsyncMock(return_value=self._NL_MAIN_HTML)
-            elif url.endswith((_PATH_MENTINFO, _PATH_NWINFO, _PATH_BEHAVIORINFO)):
-                resp.status = 404
-                resp.raise_for_status.side_effect = aiohttp.ClientResponseError(
-                    MagicMock(), MagicMock(), status=404
-                )
-                resp.text = AsyncMock(return_value="")
-            else:
-                raise AssertionError(f"Unexpected URL: {url}")
-
-            cm = MagicMock()
-            cm.__aenter__ = AsyncMock(return_value=resp)
-            cm.__aexit__ = AsyncMock(return_value=False)
-            return cm
-
-        session = MagicMock()
-        session.get = MagicMock(side_effect=fake_get)
-
         with self._patch_sessions(session):
             await coordinator._async_update_data()
 
-        assert calls[:2] == [
+        assert [call.args[0] for call in session.get.call_args_list[:2]] == [
             "http://10.0.1.116" + _PATH_MAIN,
             "https://10.0.1.116" + _PATH_MAIN,
         ]
         assert coordinator._base_url == "https://10.0.1.116"
+
+    @pytest.mark.asyncio
+    async def test_cached_scheme_failure_falls_back_and_recaches(self, hass):
+        from custom_components.epson_workforce.coordinator import (
+            _PATH_BEHAVIORINFO,
+            _PATH_MAIN,
+            _PATH_MENTINFO,
+            _PATH_NWINFO,
+        )
+
+        coordinator = _make_coordinator(hass)
+        coordinator._base_url = "https://10.0.1.116"
+        session = self._mock_session(
+            {
+                ("https", _PATH_MAIN): (
+                    200,
+                    "<html><title>Default Page</title><body>Welcome</body></html>",
+                ),
+                ("http", _PATH_MAIN): (200, self._NL_MAIN_HTML),
+                _PATH_MENTINFO: (404, ""),
+                _PATH_NWINFO: (404, ""),
+                _PATH_BEHAVIORINFO: (404, ""),
+            }
+        )
+
+        with self._patch_sessions(session):
+            await coordinator._async_update_data()
+
+        assert [call.args[0] for call in session.get.call_args_list[:2]] == [
+            "https://10.0.1.116" + _PATH_MAIN,
+            "http://10.0.1.116" + _PATH_MAIN,
+        ]
+        assert coordinator._base_url == "http://10.0.1.116"
 
     @pytest.mark.asyncio
     async def test_warns_once_when_pages_are_not_english(self, hass, caplog):
