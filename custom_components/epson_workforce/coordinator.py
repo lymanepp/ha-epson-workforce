@@ -141,6 +141,7 @@ async def async_probe_printer(
 
     return None
 
+
 # Web Config serves its pages in the printer's configured language, but the
 # supplemental pages are parsed by their English labels, so on a non-English
 # printer every lookup misses and the sensors are never created. This cookie is
