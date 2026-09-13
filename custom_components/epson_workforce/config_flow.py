@@ -9,10 +9,9 @@ from homeassistant.helpers.aiohttp_client import async_get_clientsession
 import voluptuous as vol
 
 from .const import DOMAIN
-from .coordinator import _PATH_MAIN
+from .coordinator import async_probe_printer
 
 _TIMEOUT = aiohttp.ClientTimeout(total=8)
-HTTP_OK = 200
 
 
 class EpsonConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):  # type: ignore[call-arg]
@@ -26,14 +25,8 @@ class EpsonConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):  # type: ignore
 
         if user_input is not None:
             host = user_input[CONF_HOST].strip()
-            try:
-                session = async_get_clientsession(self.hass)
-                async with session.get(
-                    f"http://{host}{_PATH_MAIN}", timeout=_TIMEOUT, ssl=False
-                ) as resp:
-                    if resp.status != HTTP_OK:
-                        errors["base"] = "cannot_connect"
-            except Exception:
+            session = async_get_clientsession(self.hass)
+            if await async_probe_printer(session, host, timeout=_TIMEOUT) is None:
                 errors["base"] = "cannot_connect"
 
             if not errors:
