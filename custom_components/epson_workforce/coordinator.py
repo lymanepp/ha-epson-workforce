@@ -30,8 +30,10 @@ _SUPPLEMENTAL = (
     ("behaviorinfo", _PATH_BEHAVIORINFO, EpsonHTMLParser.parse_behaviorinfo_page),
 )
 
+HTTP_OK = 200
 HTTP_NOT_FOUND = 404
 _TIMEOUT = aiohttp.ClientTimeout(total=10)
+_PROTOCOLS = ("http", "https")
 
 # Web Config serves its pages in the printer's configured language, but the
 # supplemental pages are parsed by their English labels, so on a non-English
@@ -46,9 +48,9 @@ _TIMEOUT = aiohttp.ClientTimeout(total=10)
 #
 # Two things this has to work around, both measured on an XP-4200:
 #  * These printers answer HTTP with a 307 to HTTPS, and aiohttp drops the Cookie
-#    header across that redirect, so the supplemental pages are requested over
-#    HTTPS directly. The plain-HTTP base URL is kept as a fallback for models
-#    that do not serve TLS.
+#    header across that redirect. Protocol discovery therefore follows the main-
+#    page redirect once, remembers the final scheme, and supplemental pages are
+#    then requested directly over that scheme. HTTP-only models remain on HTTP.
 #  * aiohttp lets a cookie jar override an explicit Cookie header, so these
 #    requests use a session with no jar. Otherwise a stray EPSON_COOKIE_LANG in
 #    Home Assistant's shared jar would silently undo this.
@@ -68,17 +70,92 @@ _MENTINFO_ENGLISH_KEYS = frozenset(
 )
 
 
+def _looks_like_main_page(raw: dict[str, Any]) -> bool:
+    """Return whether parsed data is recognizable as an Epson status page."""
+    return bool(
+        raw.get("printer_status")
+        or raw.get("scanner_status")
+        or raw.get("inks")
+        or raw.get("maintenance_box") is not None
+        or raw.get("network")
+        or raw.get("wifi_direct")
+    )
+
+
+async def async_probe_printer(
+    session: aiohttp.ClientSession,
+    host: str,
+    *,
+    schemes: tuple[str, ...] = _PROTOCOLS,
+    timeout: aiohttp.ClientTimeout = _TIMEOUT,
+) -> tuple[str, dict[str, Any]] | None:
+    """Find a working Epson endpoint and return its base URL + parsed main data.
+
+    Redirects are followed so an HTTP endpoint that upgrades to HTTPS is detected
+    as HTTPS. A successful HTTP status alone is not enough: the response must also
+    parse as an Epson main status page, which prevents a generic/default HTTPS
+    page from being cached as the printer endpoint.
+    """
+    for scheme in schemes:
+        url = f"{scheme}://{host}{_PATH_MAIN}"
+        try:
+            async with session.get(
+                url, timeout=timeout, ssl=False, allow_redirects=True
+            ) as resp:
+                if resp.status != HTTP_OK:
+                    _LOGGER.debug("GET %s → HTTP %d", url, resp.status)
+                    continue
+
+                html = await resp.text(encoding="utf-8", errors="ignore")
+                final_scheme = getattr(getattr(resp, "url", None), "scheme", None)
+                if final_scheme not in _PROTOCOLS:
+                    final_scheme = scheme
+                base_url = f"{final_scheme}://{host}"
+
+                raw = EpsonHTMLParser(
+                    html, source=base_url + _PATH_MAIN
+                ).parse()
+                if not _looks_like_main_page(raw):
+                    _LOGGER.debug(
+                        "GET %s → %d (%d bytes), but response is not an Epson "
+                        "status page",
+                        url,
+                        resp.status,
+                        len(html),
+                    )
+                    continue
+
+                _LOGGER.debug(
+                    "GET %s → %d (%d bytes); working endpoint is %s",
+                    url,
+                    resp.status,
+                    len(html),
+                    base_url,
+                )
+                return base_url, raw
+        except aiohttp.ClientResponseError as exc:
+            _LOGGER.debug("GET %s → HTTP %d", url, exc.status)
+        except (aiohttp.ClientConnectionError, TimeoutError) as exc:
+            if isinstance(exc, TimeoutError):
+                _LOGGER.debug("GET %s → timed out after %ss", url, timeout.total)
+            else:
+                _LOGGER.debug("GET %s → connection error: %s", url, exc)
+        except Exception as exc:
+            _LOGGER.debug("GET %s → unexpected error: %s", url, exc)
+
+    return None
+
+
 class EpsonCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     """Fetch all data from the Epson printer and expose it as a flat dict."""
 
     def __init__(self, hass: HomeAssistant, host: str) -> None:
         self.host = host
-        # Probe HTTPS first. Some Epson models redirect HTTP to HTTPS, which is
-        # harmless for the localized main page but would drop the explicit
-        # language cookie on supplemental requests. Once a working scheme is
-        # found, remember it so HTTP-only models are not forced through a failed
-        # HTTPS attempt on every poll.
-        self._base_url = f"https://{host}"
+        # The working Web Config scheme is discovered on the first update and
+        # cached. HTTP is tried first; if it redirects to HTTPS, the final scheme
+        # is captured so supplemental requests can go directly to HTTPS without
+        # losing the explicit language cookie across a redirect.
+        self._base_url: str | None = None
         self._supplemental_404: set[str] = set()
         self._language_warned = False
         self._web_config_session: aiohttp.ClientSession | None = None
@@ -91,13 +168,14 @@ class EpsonCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
     async def _async_update_data(self) -> dict[str, Any]:
         # Fetch the main page — failure is fatal for this cycle.
-        _LOGGER.debug("Fetching main status page from %s", self._base_url)
-        main_html = await self._fetch(_PATH_MAIN)
-        if main_html is None:
-            raise UpdateFailed(f"Cannot reach printer at {self._base_url}")  # noqa: TRY003
-
-        parser = EpsonHTMLParser(main_html, source=self._base_url + _PATH_MAIN)
-        raw = parser.parse()
+        _LOGGER.debug(
+            "Fetching main status page from %s", self._base_url or self.host
+        )
+        raw = await self._fetch_main()
+        if raw is None or self._base_url is None:
+            raise UpdateFailed(
+                f"Cannot reach printer at {self.host} over HTTP or HTTPS"
+            )  # noqa: TRY003
         _LOGGER.debug(
             "Main page parsed: model=%s status=%s inks=%s",
             raw.get("model"),
@@ -184,42 +262,26 @@ class EpsonCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             )
         return self._web_config_session
 
-    async def _fetch(self, path: str) -> str | None:
-        """Fetch the localized main page and remember the working scheme."""
-        base_urls = [self._base_url]
-        if self._base_url.startswith("https://"):
-            base_urls.append(f"http://{self.host}")
+    async def _fetch_main(self) -> dict[str, Any] | None:
+        """Fetch and parse the main page, caching the working scheme."""
+        if self._base_url is None:
+            schemes = _PROTOCOLS
+        else:
+            cached_scheme = self._base_url.split(":", 1)[0]
+            alternate = "https" if cached_scheme == "http" else "http"
+            schemes = (cached_scheme, alternate)
 
-        for index, base_url in enumerate(base_urls):
-            url = base_url + path
-            try:
-                async with self._session().get(
-                    url, timeout=_TIMEOUT, ssl=False
-                ) as resp:
-                    resp.raise_for_status()
-                    html = await resp.text(encoding="utf-8", errors="ignore")
-                    self._base_url = base_url
-                    _LOGGER.debug("GET %s → %d (%d bytes)", url, resp.status, len(html))
-                    return html
-            except aiohttp.ClientResponseError as exc:
-                _LOGGER.debug("GET %s → HTTP %d", url, exc.status)
-                return None
-            except (aiohttp.ClientConnectionError, TimeoutError) as exc:
-                if index + 1 < len(base_urls):
-                    _LOGGER.debug(
-                        "GET %s → connection failed (%s); trying HTTP", url, exc
-                    )
-                    continue
-                if isinstance(exc, TimeoutError):
-                    _LOGGER.debug("GET %s → timed out after %ss", url, _TIMEOUT.total)
-                else:
-                    _LOGGER.debug("GET %s → connection error: %s", url, exc)
-                return None
-            except Exception as exc:
-                _LOGGER.debug("GET %s → unexpected error: %s", url, exc)
-                return None
+        result = await async_probe_printer(
+            self._session(), self.host, schemes=schemes, timeout=_TIMEOUT
+        )
+        if result is None:
+            return None
 
-        return None
+        base_url, raw = result
+        if self._base_url != base_url:
+            _LOGGER.debug("Using Epson Web Config at %s", base_url)
+        self._base_url = base_url
+        return raw
 
     async def _fetch_supplemental(
         self,
@@ -230,6 +292,8 @@ class EpsonCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         # The main-page fetch has already discovered and cached a working scheme,
         # so supplemental requests can use it directly without probing a known-
         # dead HTTPS endpoint on every update.
+        if self._base_url is None:
+            return None
         url = self._base_url + path
         try:
             async with self._session().get(
