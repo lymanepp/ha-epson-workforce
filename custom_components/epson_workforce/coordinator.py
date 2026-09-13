@@ -141,6 +141,40 @@ async def async_probe_printer(
 
     return None
 
+# Web Config serves its pages in the printer's configured language, but the
+# supplemental pages are parsed by their English labels, so on a non-English
+# printer every lookup misses and the sensors are never created. This cookie is
+# what Web Config's own language selector sets; most models honour it and return
+# English regardless of the printer's own setting.
+#
+# It is sent only for the supplemental pages. The main page contains user-facing
+# printer/scanner status strings that should stay in the language the owner
+# configured. Any fields on that page that are keyed by English display labels
+# can fall back to the forced-English supplemental network page.
+#
+# Two things this has to work around, both measured on an XP-4200:
+#  * These printers answer HTTP with a 307 to HTTPS, and aiohttp drops the Cookie
+#    header across that redirect, so the supplemental pages are requested over
+#    HTTPS directly. The plain-HTTP base URL is kept as a fallback for models
+#    that do not serve TLS.
+#  * aiohttp lets a cookie jar override an explicit Cookie header, so these
+#    requests use a session with no jar. Otherwise a stray EPSON_COOKIE_LANG in
+#    Home Assistant's shared jar would silently undo this.
+_ENGLISH_LANG_COOKIE = {"Cookie": "EPSON_COOKIE_LANG=lang_b&1/lang_a&1"}
+
+_MENTINFO_ENGLISH_KEYS = frozenset(
+    {
+        "Total Number of Pages",
+        "Total Number of B&W Pages",
+        "Total Number of Color Pages",
+        "B&W Copy",
+        "Color Copy",
+        "B&W Scan",
+        "Color Scan",
+        "First Printing Date",
+    }
+)
+
 
 class EpsonCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     """Fetch all data from the Epson printer and expose it as a flat dict."""
