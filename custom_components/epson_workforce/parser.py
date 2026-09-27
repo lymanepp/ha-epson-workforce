@@ -147,7 +147,7 @@ class EpsonHTMLParser:
         inks: dict[str, int] = {}
         maintenance: int | None = None
 
-        for li in self.soup.select("li.tank"):
+        for li in self.soup.find_all("li", class_="tank"):
             # label
             label = None
             for d in li.find_all("div"):

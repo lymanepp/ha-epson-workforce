@@ -301,9 +301,7 @@ class EpsonCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 _LOGGER.debug("GET %s → %d (%d bytes)", url, resp.status, len(html))
             return (key, page_parser(html))
         except aiohttp.ClientResponseError as exc:
-            _LOGGER.debug(
-                "GET %s → HTTP %d (transient, will retry)", url, exc.status
-            )
+            _LOGGER.debug("GET %s → HTTP %d (transient, will retry)", url, exc.status)
             return None
         except aiohttp.ClientConnectionError as exc:
             _LOGGER.debug("GET %s → connection error (transient): %s", url, exc)
