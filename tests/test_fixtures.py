@@ -17,6 +17,19 @@ ALL_FIXTURES = sorted(
 # ---- Per-file expectations (only list what you care to assert) ----
 # Any keys omitted will be skipped (defaults handle the rest).
 EXPECTATIONS: dict[str, dict[str, Any]] = {
+    "WF-2510.html": {
+        "model": "Epson WF-2510 Series",
+        "printer_status": "Disponibile",
+        "inks": {
+            "BK": 88,
+            "Y": 42,
+            "M": 40,
+            "C": 36,
+        },
+        "network": {
+            "SSID": "XXXXXX",
+        },
+    },
     "WF-2930.html": {
         "inks": {
             "BK": 84,

@@ -20,6 +20,8 @@ _LOGGER = logging.getLogger(__name__)
 SCAN_INTERVAL = timedelta(seconds=60)
 
 _PATH_MAIN = "/PRESENTATION/HTML/TOP/PRTINFO.HTML"
+_PATH_MAIN_INDEX = "/PRESENTATION/HTML/TOP/INDEX.HTML"
+_MAIN_PATHS = (_PATH_MAIN, _PATH_MAIN_INDEX)
 _PATH_MENTINFO = "/PRESENTATION/ADVANCED/INFO_MENTINFO/TOP"
 _PATH_NWINFO = "/PRESENTATION/ADVANCED/INFO_NWINFO/TOP"
 _PATH_BEHAVIORINFO = "/PRESENTATION/ADVANCED/INFO_BEHAVIORINFO/TOP"
@@ -87,57 +89,78 @@ async def async_probe_printer(
     host: str,
     *,
     schemes: tuple[str, ...] = _PROTOCOLS,
+    paths: tuple[str, ...] = _MAIN_PATHS,
     timeout: aiohttp.ClientTimeout = _TIMEOUT,
-) -> tuple[str, dict[str, Any]] | None:
-    """Find a working Epson endpoint and return its base URL + parsed main data.
+) -> tuple[str, str, dict[str, Any]] | None:
+    """Find a working Epson endpoint and return base URL, path, and parsed data.
 
     Redirects are followed so an HTTP endpoint that upgrades to HTTPS is detected
     as HTTPS. A successful HTTP status alone is not enough: the response must also
     parse as an Epson main status page, which prevents a generic/default HTTPS
-    page from being cached as the printer endpoint.
+    page from being cached as the printer endpoint. Some older WorkForce models
+    expose their status page as INDEX.HTML instead of PRTINFO.HTML, so all known
+    main-page paths are probed before moving to the alternate protocol.
+
+    A connection-establishment failure means the scheme itself is unavailable,
+    so the remaining paths for that scheme are skipped rather than repeating a
+    request that is expected to fail the same way. Errors after connecting are
+    allowed to fall through to the alternate path because older embedded web
+    servers do not always fail unknown paths cleanly.
     """
     for scheme in schemes:
-        url = f"{scheme}://{host}{_PATH_MAIN}"
-        try:
-            async with session.get(
-                url, timeout=timeout, ssl=False, allow_redirects=True
-            ) as resp:
-                if resp.status != HTTP_OK:
-                    _LOGGER.debug("GET %s → HTTP %d", url, resp.status)
-                    continue
+        for path in paths:
+            url = f"{scheme}://{host}{path}"
+            try:
+                async with session.get(
+                    url, timeout=timeout, ssl=False, allow_redirects=True
+                ) as resp:
+                    if resp.status != HTTP_OK:
+                        _LOGGER.debug("GET %s → HTTP %d", url, resp.status)
+                        continue
 
-                html = await resp.text(encoding="utf-8", errors="ignore")
-                final_scheme = resp.url.scheme
-                if final_scheme not in _PROTOCOLS:
-                    _LOGGER.debug(
-                        "GET %s → unsupported final scheme %s", url, final_scheme
-                    )
-                    continue
-                base_url = f"{final_scheme}://{host}"
+                    html = await resp.text(encoding="utf-8", errors="ignore")
+                    final_scheme = resp.url.scheme
+                    if final_scheme not in _PROTOCOLS:
+                        _LOGGER.debug(
+                            "GET %s → unsupported final scheme %s", url, final_scheme
+                        )
+                        continue
+                    base_url = f"{final_scheme}://{host}"
 
-                raw = EpsonHTMLParser(html, source=base_url + _PATH_MAIN).parse()
-                if not _looks_like_main_page(raw):
+                    raw = EpsonHTMLParser(html, source=base_url + path).parse()
+                    if not _looks_like_main_page(raw):
+                        _LOGGER.debug(
+                            "GET %s → %d (%d bytes), but response is not an Epson "
+                            "status page",
+                            url,
+                            resp.status,
+                            len(html),
+                        )
+                        continue
+
                     _LOGGER.debug(
-                        "GET %s → %d (%d bytes), but response is not an Epson "
-                        "status page",
+                        "GET %s → %d (%d bytes); working endpoint is %s%s",
                         url,
                         resp.status,
                         len(html),
+                        base_url,
+                        path,
                     )
-                    continue
-
+                    return base_url, path, raw
+            except aiohttp.ConnectionTimeoutError:
                 _LOGGER.debug(
-                    "GET %s → %d (%d bytes); working endpoint is %s",
-                    url,
-                    resp.status,
-                    len(html),
-                    base_url,
+                    "GET %s → connection timed out after %ss", url, timeout.total
                 )
-                return base_url, raw
-        except TimeoutError:
-            _LOGGER.debug("GET %s → timed out after %ss", url, timeout.total)
-        except aiohttp.ClientError as exc:
-            _LOGGER.debug("GET %s → request error: %s", url, exc)
+                break
+            except aiohttp.ClientConnectorError as exc:
+                _LOGGER.debug("GET %s → connection failed: %s", url, exc)
+                break
+            except TimeoutError:
+                _LOGGER.debug("GET %s → timed out after %ss", url, timeout.total)
+            except aiohttp.ClientConnectionError as exc:
+                _LOGGER.debug("GET %s → connection error: %s", url, exc)
+            except aiohttp.ClientError as exc:
+                _LOGGER.debug("GET %s → request error: %s", url, exc)
 
     return None
 
@@ -152,6 +175,11 @@ class EpsonCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         # supplemental requests can use it directly without losing the explicit
         # language cookie across a redirect.
         self._base_url = f"http://{host}"
+        # Most Epson models use PRTINFO.HTML. Some older WorkForce models (for
+        # example the WF-2510) serve the same status-page schema at INDEX.HTML.
+        # Cache the discovered path so only one main-page request is needed on
+        # normal polling cycles.
+        self._main_path = _PATH_MAIN
         self._supplemental_404: set[str] = set()
         self._language_warned = False
         self._web_config_session: aiohttp.ClientSession | None = None
@@ -257,21 +285,30 @@ class EpsonCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         return self._web_config_session
 
     async def _fetch_main(self) -> dict[str, Any] | None:
-        """Fetch and parse the main page, caching the working scheme."""
+        """Fetch and parse the main page, caching the working scheme and path."""
         cached_scheme = self._base_url.split(":", 1)[0]
         alternate = "https" if cached_scheme == "http" else "http"
         schemes = (cached_scheme, alternate)
+        paths = (
+            self._main_path,
+            *[path for path in _MAIN_PATHS if path != self._main_path],
+        )
 
         result = await async_probe_printer(
-            self._session(), self.host, schemes=schemes, timeout=_TIMEOUT
+            self._session(),
+            self.host,
+            schemes=schemes,
+            paths=paths,
+            timeout=_TIMEOUT,
         )
         if result is None:
             return None
 
-        base_url, raw = result
-        if self._base_url != base_url:
-            _LOGGER.debug("Using Epson Web Config at %s", base_url)
+        base_url, main_path, raw = result
+        if self._base_url != base_url or self._main_path != main_path:
+            _LOGGER.debug("Using Epson Web Config at %s%s", base_url, main_path)
         self._base_url = base_url
+        self._main_path = main_path
         return raw
 
     async def _fetch_supplemental(

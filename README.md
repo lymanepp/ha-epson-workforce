@@ -25,17 +25,22 @@ The integration works with any Epson printer that serves a status page over HTTP
 
 | Series | Models |
 |---|---|
-| WorkForce | WF-26xx, WF-27xx, WF-28xx, WF-29xx, WF-32xx, WF-35xx, WF-36xx, WF-48xx, WF-77xx, WF-78xx |
+| WorkForce | WF-25xx, WF-26xx, WF-27xx, WF-28xx, WF-29xx, WF-32xx, WF-35xx, WF-36xx, WF-48xx, WF-77xx, WF-78xx |
 | EcoTank | ET-26xx, ET-27xx, ET-28xx, ET-47xx, ET-48xx, ET-49xx, ET-51xx, ET-77xx, ET-85xx, L-series |
 | Expression | XP-8xx, XP-21xx, XP-22xx |
 
-**Confirmed working:** WF-2630, WF-2660, WF-2760, WF-2835, WF-3540, WF-3620, WF-3640, WF-4820, WF-7720, WF-7830, WF-7840, ET-2650, ET-2750, ET-2820, ET-4750, ET-4800, ET-4950, ET-5150, ET-7700, ET-7750, ET-8500, L6270, XP-860, XP-2100, XP-2105, XP-2150, XP-2205
+**Confirmed working:** WF-2510, WF-2630, WF-2660, WF-2760, WF-2835, WF-3540, WF-3620, WF-3640, WF-4820, WF-7720, WF-7830, WF-7840, ET-2650, ET-2750, ET-2820, ET-4750, ET-4800, ET-4950, ET-5150, ET-7700, ET-7750, ET-8500, L6270, XP-860, XP-2100, XP-2105, XP-2150, XP-2205
 
 **To verify your printer is compatible**, open a browser and visit:
 ```
 http://YOUR_PRINTER_IP/PRESENTATION/HTML/TOP/PRTINFO.HTML
 ```
-If you see a status page with ink levels, the integration will work.
+Older models such as the WF-2510 may instead use:
+```
+http://YOUR_PRINTER_IP/PRESENTATION/HTML/TOP/INDEX.HTML
+```
+If either URL shows a status page with ink levels, the integration will detect the
+working endpoint automatically.
 
 > [!NOTE]
 > Please [open an issue](https://github.com/lymanepp/ha-epson-workforce/issues/new) only if you have a printer from a series not listed above, or a confirmed failure on a listed model (include logs and the printer status page HTML). Do not open issues to report additional working models within a listed series.

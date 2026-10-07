@@ -233,6 +233,7 @@ class TestMainPageValidation:
             "ET-4950.HTML",
             "ET-8500.html",
             "L6270.html",
+            "WF-2510.html",
             "WF-2930.html",
             "WF-3540.html",
             "WF-7720.html",
@@ -338,11 +339,17 @@ class TestCoordinatorFetch:
     async def test_main_page_failure_raises(self, hass):
         from homeassistant.helpers.update_coordinator import UpdateFailed
 
-        from custom_components.epson_workforce.coordinator import _PATH_MAIN
+        from custom_components.epson_workforce.coordinator import (
+            _PATH_MAIN,
+            _PATH_MAIN_INDEX,
+        )
 
         coordinator = _make_coordinator(hass)
 
-        responses = {_PATH_MAIN: (503, "")}
+        responses = {
+            _PATH_MAIN: (503, ""),
+            _PATH_MAIN_INDEX: (404, ""),
+        }
 
         with (
             self._patch_sessions(self._mock_session(responses)),
@@ -458,6 +465,7 @@ class TestCoordinatorFetch:
         from custom_components.epson_workforce.coordinator import (
             _PATH_BEHAVIORINFO,
             _PATH_MAIN,
+            _PATH_MAIN_INDEX,
             _PATH_MENTINFO,
             _PATH_NWINFO,
         )
@@ -466,6 +474,7 @@ class TestCoordinatorFetch:
         session = self._mock_session(
             {
                 ("http", _PATH_MAIN): http_response,
+                ("http", _PATH_MAIN_INDEX): (404, ""),
                 ("https", _PATH_MAIN): (200, self._NL_MAIN_HTML),
                 _PATH_MENTINFO: (404, ""),
                 _PATH_NWINFO: (404, ""),
@@ -476,8 +485,14 @@ class TestCoordinatorFetch:
         with self._patch_sessions(session):
             await coordinator._async_update_data()
 
-        assert [call.args[0] for call in session.get.call_args_list[:2]] == [
+        main_calls = [
+            call.args[0]
+            for call in session.get.call_args_list
+            if "/PRESENTATION/HTML/TOP/" in call.args[0]
+        ]
+        assert main_calls == [
             "http://10.0.1.116" + _PATH_MAIN,
+            "http://10.0.1.116" + _PATH_MAIN_INDEX,
             "https://10.0.1.116" + _PATH_MAIN,
         ]
         assert coordinator._base_url == "https://10.0.1.116"
@@ -487,6 +502,7 @@ class TestCoordinatorFetch:
         from custom_components.epson_workforce.coordinator import (
             _PATH_BEHAVIORINFO,
             _PATH_MAIN,
+            _PATH_MAIN_INDEX,
             _PATH_MENTINFO,
             _PATH_NWINFO,
         )
@@ -499,6 +515,85 @@ class TestCoordinatorFetch:
                     200,
                     "<html><title>Default Page</title><body>Welcome</body></html>",
                 ),
+                ("https", _PATH_MAIN_INDEX): (404, ""),
+                ("http", _PATH_MAIN): (200, self._NL_MAIN_HTML),
+                _PATH_MENTINFO: (404, ""),
+                _PATH_NWINFO: (404, ""),
+                _PATH_BEHAVIORINFO: (404, ""),
+            }
+        )
+
+        with self._patch_sessions(session):
+            await coordinator._async_update_data()
+
+        assert [call.args[0] for call in session.get.call_args_list[:3]] == [
+            "https://10.0.1.116" + _PATH_MAIN,
+            "https://10.0.1.116" + _PATH_MAIN_INDEX,
+            "http://10.0.1.116" + _PATH_MAIN,
+        ]
+        assert coordinator._base_url == "http://10.0.1.116"
+
+    @pytest.mark.asyncio
+    async def test_index_main_page_is_discovered_and_cached(self, hass):
+        from custom_components.epson_workforce.coordinator import (
+            _PATH_BEHAVIORINFO,
+            _PATH_MAIN,
+            _PATH_MAIN_INDEX,
+            _PATH_MENTINFO,
+            _PATH_NWINFO,
+        )
+
+        fixture = Path(__file__).parent / "fixtures" / "WF-2510.html"
+        index_html = fixture.read_text(encoding="utf-8")
+        coordinator = _make_coordinator(hass)
+        session = self._mock_session(
+            {
+                _PATH_MAIN: (404, ""),
+                _PATH_MAIN_INDEX: (200, index_html),
+                _PATH_MENTINFO: (404, ""),
+                _PATH_NWINFO: (404, ""),
+                _PATH_BEHAVIORINFO: (404, ""),
+            }
+        )
+
+        with self._patch_sessions(session):
+            first = await coordinator._async_update_data()
+            first_poll = [call.args[0] for call in session.get.call_args_list]
+            session.get.reset_mock()
+            second = await coordinator._async_update_data()
+
+        assert first["_model"] == "Epson WF-2510 Series"
+        assert first["printer_status"] == "Disponibile"
+        assert first["ink_bk"] == 88
+        assert first["ink_y"] == 42
+        assert first["ink_m"] == 40
+        assert first["ink_c"] == 36
+        assert second == first
+        assert first_poll[:2] == [
+            "http://10.0.1.116" + _PATH_MAIN,
+            "http://10.0.1.116" + _PATH_MAIN_INDEX,
+        ]
+        assert coordinator._base_url == "http://10.0.1.116"
+        assert coordinator._main_path == _PATH_MAIN_INDEX
+        assert [call.args[0] for call in session.get.call_args_list] == [
+            "http://10.0.1.116" + _PATH_MAIN_INDEX
+        ]
+
+    @pytest.mark.asyncio
+    async def test_cached_index_failure_rediscovers_primary_path(self, hass):
+        from custom_components.epson_workforce.coordinator import (
+            _PATH_BEHAVIORINFO,
+            _PATH_MAIN,
+            _PATH_MAIN_INDEX,
+            _PATH_MENTINFO,
+            _PATH_NWINFO,
+        )
+
+        coordinator = _make_coordinator(hass)
+        coordinator._main_path = _PATH_MAIN_INDEX
+        session = self._mock_session(
+            {
+                ("http", _PATH_MAIN_INDEX): (404, ""),
                 ("http", _PATH_MAIN): (200, self._NL_MAIN_HTML),
                 _PATH_MENTINFO: (404, ""),
                 _PATH_NWINFO: (404, ""),
@@ -510,10 +605,10 @@ class TestCoordinatorFetch:
             await coordinator._async_update_data()
 
         assert [call.args[0] for call in session.get.call_args_list[:2]] == [
-            "https://10.0.1.116" + _PATH_MAIN,
+            "http://10.0.1.116" + _PATH_MAIN_INDEX,
             "http://10.0.1.116" + _PATH_MAIN,
         ]
-        assert coordinator._base_url == "http://10.0.1.116"
+        assert coordinator._main_path == _PATH_MAIN
 
     @pytest.mark.asyncio
     async def test_warns_once_when_pages_are_not_english(self, hass, caplog):
