@@ -1,0 +1,19 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Epson WorkForce Printer",
+        "description": "Enter the IP address of your Epson printer.",
+        "data": {
+          "host": "IP Address"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Failed to connect. Check the IP address and ensure the printer is on the network."
+    },
+    "abort": {
+      "already_configured": "This printer is already configured."
+    }
+  }
+}
