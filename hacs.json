@@ -1,7 +1,7 @@
 {
     "name": "Epson WorkForce",
     "render_readme": true,
-    "homeassistant": "2024.5.0",
+    "homeassistant": "2024.8.0",
     "filename": "epson_workforce.zip",
     "zip_release": true
 }
