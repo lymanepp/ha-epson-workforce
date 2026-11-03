@@ -8,7 +8,7 @@ from homeassistant.components.sensor import (
     SensorStateClass,
 )
 from homeassistant.const import PERCENTAGE
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity import EntityCategory
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
@@ -227,13 +227,28 @@ async def async_setup_entry(
     entry: EpsonConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
-    """Set up sensors from a config entry."""
+    """Set up sensors from a config entry.
+
+    A sensor is created once its value first appears. Supplemental pages can
+    fail transiently, so values missing from the first refresh may arrive
+    later; checking on every update makes sure those sensors still get created.
+    """
     coordinator: EpsonCoordinator = entry.runtime_data
-    async_add_entities(
-        EpsonSensor(coordinator, entry, desc)
-        for desc in SENSOR_TYPES
-        if desc.key in coordinator.data
-    )
+    added: set[str] = set()
+
+    @callback
+    def _async_add_new_sensors() -> None:
+        data = coordinator.data or {}
+        new = [
+            desc for desc in SENSOR_TYPES if desc.key in data and desc.key not in added
+        ]
+        if not new:
+            return
+        added.update(desc.key for desc in new)
+        async_add_entities(EpsonSensor(coordinator, entry, desc) for desc in new)
+
+    _async_add_new_sensors()
+    entry.async_on_unload(coordinator.async_add_listener(_async_add_new_sensors))
 
 
 class EpsonSensor(CoordinatorEntity[EpsonCoordinator], SensorEntity):
