@@ -9,6 +9,7 @@ from homeassistant.config_entries import ConfigFlow, ConfigFlowResult
 from homeassistant.const import CONF_HOST
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.device_registry import format_mac
+from homeassistant.helpers.service_info.zeroconf import ZeroconfServiceInfo
 import voluptuous as vol
 
 from .const import DOMAIN
@@ -31,6 +32,11 @@ class EpsonConfigFlow(ConfigFlow, domain=DOMAIN):  # type: ignore[call-arg]
     """Handle a config flow for Epson WorkForce."""
 
     VERSION = 1
+
+    def __init__(self) -> None:
+        """Initialize the flow."""
+        self._discovered_host: str | None = None
+        self._discovered_model: str | None = None
 
     async def _async_probe(self, host: str) -> dict[str, Any] | None:
         """Return the parsed status page, or None if no printer answers."""
@@ -61,6 +67,62 @@ class EpsonConfigFlow(ConfigFlow, domain=DOMAIN):  # type: ignore[call-arg]
 
         return self.async_show_form(
             step_id="user", data_schema=_schema(), errors=errors
+        )
+
+    async def async_step_zeroconf(
+        self, discovery_info: ZeroconfServiceInfo
+    ) -> ConfigFlowResult:
+        """Handle a printer found via its IPP mDNS announcement.
+
+        Also keeps configured printers reachable: if a known printer shows up
+        at a new address, its entry's host is updated and the entry reloaded.
+        """
+        # Web Config URLs are built as http://<host>/..., so use IPv4.
+        host = next(
+            (
+                str(ip)
+                for ip in discovery_info.ip_addresses
+                if ip.version == 4 and not ip.is_link_local  # noqa: PLR2004
+            ),
+            None,
+        )
+        if host is None:
+            return self.async_abort(reason="not_ipv4_address")
+
+        # Already configured at this address: nothing to do, and no need to
+        # contact the printer on every Home Assistant start.
+        self._async_abort_entries_match({CONF_HOST: host})
+
+        raw = await self._async_probe(host)
+        if raw is None:
+            return self.async_abort(reason="cannot_connect")
+
+        await self.async_set_unique_id(_unique_id(host, raw))
+        self._abort_if_unique_id_configured(updates={CONF_HOST: host})
+
+        self._discovered_host = host
+        self._discovered_model = raw.get("model") or f"Epson {host}"
+        self.context["title_placeholders"] = {"name": self._discovered_model}
+        return await self.async_step_discovery_confirm()
+
+    async def async_step_discovery_confirm(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Ask the user to confirm adding a discovered printer."""
+        assert self._discovered_host is not None
+        if user_input is not None:
+            return self.async_create_entry(
+                title=f"Epson {self._discovered_host}",
+                data={CONF_HOST: self._discovered_host},
+            )
+
+        self._set_confirm_only()
+        return self.async_show_form(
+            step_id="discovery_confirm",
+            description_placeholders={
+                "model": self._discovered_model or "",
+                "host": self._discovered_host,
+            },
         )
 
     async def async_step_reconfigure(

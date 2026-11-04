@@ -1,5 +1,6 @@
 {
   "config": {
+    "flow_title": "{name}",
     "step": {
       "user": {
         "title": "Epson WorkForce Printer",
@@ -14,6 +15,10 @@
         "data": {
           "host": "IP Address"
         }
+      },
+      "discovery_confirm": {
+        "title": "Discovered Epson printer",
+        "description": "Do you want to add the {model} at {host}?"
       }
     },
     "error": {
@@ -22,7 +27,10 @@
     "abort": {
       "already_configured": "This printer is already configured.",
       "reconfigure_successful": "The printer address was updated.",
-      "wrong_printer": "A different printer answered at that address. Enter the address of the printer that this entry was set up with."
+      "wrong_printer": "A different printer answered at that address. Enter the address of the printer that this entry was set up with.",
+      "cannot_connect": "Failed to connect to the printer.",
+      "not_ipv4_address": "Only printers with an IPv4 address are supported.",
+      "already_in_progress": "Setup for this printer is already in progress."
     }
   }
 }

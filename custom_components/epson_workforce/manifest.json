@@ -8,5 +8,6 @@
   "issue_tracker": "https://github.com/lymanepp/ha-epson-workforce/issues",
   "loggers": [],
   "requirements": ["beautifulsoup4>=4.12.3"],
-  "version": "0.9.4"
+  "version": "0.9.4",
+  "zeroconf": [{ "type": "_ipp._tcp.local.", "name": "epson*" }]
 }

@@ -59,6 +59,8 @@ Copy the `custom_components/epson_workforce` folder into your HA `config/custom_
 
 <a href="https://my.home-assistant.io/redirect/config_flow_start/?domain=epson_workforce" target="_blank"><img src="https://my.home-assistant.io/badges/config_flow_start.svg" alt="Add integration"></a>
 
+Epson printers on your network are usually discovered automatically (via their IPP mDNS announcement) and appear under **Settings → Devices & services → Discovered**. Otherwise, add the integration manually:
+
 Enter your printer's IP address when prompted. The integration will connect, detect available sensors, and start polling every 60 seconds.
 
 > [!TIP]
@@ -68,7 +70,7 @@ Enter your printer's IP address when prompted. The integration will connect, det
 > - Print a network status sheet from the printer's menu
 > - Assign a static IP or DHCP reservation in your router to prevent the address from changing
 
-**If the printer's IP address changes**, open the integration's menu (⋮) and choose **Reconfigure** to enter the new address. Sensors, entity IDs, and history are kept.
+**If the printer's IP address changes**, discovery normally picks up the new address on its own. If it doesn't, open the integration's menu (⋮) and choose **Reconfigure** to enter the new address. Sensors, entity IDs, and history are kept.
 
 ## Sensors
 
