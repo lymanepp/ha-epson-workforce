@@ -10,4 +10,7 @@ pytest-asyncio==0.24.0
 pytest-cov==6.0.0
 # https://github.com/MatthewFlamm/pytest-homeassistant-custom-component/releases
 pytest-homeassistant-custom-component>=0.13.190
+# pycares 4.9+ starts a background thread that this pinned test plugin
+# reports as a leak; HA 2024.12 shipped with an older pycares.
+pycares<4.9
 ruff==0.8.0
