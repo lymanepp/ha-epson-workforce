@@ -258,7 +258,9 @@ class TestMainPageValidation:
 
 
 def _make_coordinator(hass):
-    return EpsonCoordinator(hass, "10.0.1.116")
+    entry = MagicMock()
+    entry.data = {"host": "10.0.1.116"}
+    return EpsonCoordinator(hass, entry)
 
 
 class TestCoordinatorFetch:

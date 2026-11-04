@@ -9,6 +9,8 @@ import re
 from typing import Any
 
 import aiohttp
+from homeassistant.config_entries import ConfigEntry
+from homeassistant.const import CONF_HOST
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.aiohttp_client import async_create_clientsession
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
@@ -168,7 +170,8 @@ async def async_probe_printer(
 class EpsonCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     """Fetch all data from the Epson printer and expose it as a flat dict."""
 
-    def __init__(self, hass: HomeAssistant, host: str) -> None:
+    def __init__(self, hass: HomeAssistant, config_entry: ConfigEntry) -> None:
+        host: str = config_entry.data[CONF_HOST]
         self.host = host
         # Start with HTTP; _fetch_main validates it, follows redirects, and falls
         # back to HTTPS when needed. The working scheme is then cached so
@@ -186,6 +189,7 @@ class EpsonCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         super().__init__(
             hass,
             _LOGGER,
+            config_entry=config_entry,
             name=f"Epson {host}",
             update_interval=SCAN_INTERVAL,
         )
@@ -277,6 +281,10 @@ class EpsonCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         explicit Cookie header. Using the same isolated session for the main page
         also prevents a stale shared-session language cookie from changing the
         localized status strings we intentionally preserve.
+
+        The first call happens during the config entry's first refresh, so Home
+        Assistant ties the session to the entry and detaches it on unload or
+        failed setup. Keep that first call inside setup, or that cleanup is lost.
         """
         if self._web_config_session is None:
             self._web_config_session = async_create_clientsession(
