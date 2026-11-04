@@ -721,3 +721,135 @@ class TestCoordinatorFetch:
         assert not [
             r for r in caplog.records if "expected English labels" in r.getMessage()
         ]
+
+    # --- supplemental page caching ---
+
+    _MENTINFO_HTML = (
+        Path(__file__).parent
+        / "fixtures"
+        / "PRESENTATION-ADVANCED-INFO_MENTINFO-TOP.html"
+    ).read_text(encoding="utf-8")
+
+    def _supplemental_responses(self):
+        from custom_components.epson_workforce.coordinator import (
+            _PATH_BEHAVIORINFO,
+            _PATH_MAIN,
+            _PATH_MENTINFO,
+            _PATH_NWINFO,
+        )
+
+        return {
+            _PATH_MAIN: (200, self._NL_MAIN_HTML),
+            _PATH_MENTINFO: (200, self._MENTINFO_HTML),
+            _PATH_NWINFO: (404, ""),
+            _PATH_BEHAVIORINFO: (404, ""),
+        }
+
+    @staticmethod
+    def _age_supplemental(coordinator, delta):
+        """Pretend the cached supplemental pages were fetched `delta` earlier."""
+        coordinator._supplemental = {
+            key: (fetched - delta, page)
+            for key, (fetched, page) in coordinator._supplemental.items()
+        }
+
+    @staticmethod
+    def _requested(session):
+        return [
+            call.args[0].split("/PRESENTATION", 1)[-1]
+            for call in session.get.call_args_list
+        ]
+
+    @pytest.mark.asyncio
+    async def test_supplemental_not_refetched_within_interval(self, hass):
+        coordinator = _make_coordinator(hass)
+        session = self._mock_session(self._supplemental_responses())
+
+        with self._patch_sessions(session):
+            first = await coordinator._async_update_data()
+            session.get.reset_mock()
+            second = await coordinator._async_update_data()
+
+        assert "total_pages" in first
+        assert second == first
+        assert self._requested(session) == ["/HTML/TOP/PRTINFO.HTML"]
+
+    @pytest.mark.asyncio
+    async def test_supplemental_refetched_after_interval(self, hass):
+        from custom_components.epson_workforce.coordinator import (
+            SUPPLEMENTAL_INTERVAL,
+        )
+
+        coordinator = _make_coordinator(hass)
+        session = self._mock_session(self._supplemental_responses())
+
+        with self._patch_sessions(session):
+            await coordinator._async_update_data()
+            self._age_supplemental(coordinator, SUPPLEMENTAL_INTERVAL)
+            session.get.reset_mock()
+            await coordinator._async_update_data()
+
+        assert "/ADVANCED/INFO_MENTINFO/TOP" in self._requested(session)
+
+    @pytest.mark.asyncio
+    async def test_transient_failure_keeps_last_values_and_retries(self, hass):
+        from custom_components.epson_workforce.coordinator import (
+            _PATH_MENTINFO,
+            SUPPLEMENTAL_INTERVAL,
+        )
+
+        coordinator = _make_coordinator(hass)
+        responses = self._supplemental_responses()
+        session = self._mock_session(responses)
+
+        with self._patch_sessions(session):
+            first = await coordinator._async_update_data()
+            self._age_supplemental(coordinator, SUPPLEMENTAL_INTERVAL)
+            responses[_PATH_MENTINFO] = (503, "")
+            second = await coordinator._async_update_data()
+            session.get.reset_mock()
+            await coordinator._async_update_data()
+
+        assert second["total_pages"] == first["total_pages"]
+        # Still failing data is not "fresh", so the next cycle retries it.
+        assert "/ADVANCED/INFO_MENTINFO/TOP" in self._requested(session)
+
+    @pytest.mark.asyncio
+    async def test_values_dropped_after_max_age(self, hass):
+        from custom_components.epson_workforce.coordinator import (
+            _PATH_MENTINFO,
+            SUPPLEMENTAL_MAX_AGE,
+        )
+
+        coordinator = _make_coordinator(hass)
+        responses = self._supplemental_responses()
+        session = self._mock_session(responses)
+
+        with self._patch_sessions(session):
+            await coordinator._async_update_data()
+            self._age_supplemental(coordinator, SUPPLEMENTAL_MAX_AGE * 2)
+            responses[_PATH_MENTINFO] = (503, "")
+            data = await coordinator._async_update_data()
+
+        assert "total_pages" not in data
+        assert "mentinfo" not in coordinator._supplemental
+
+    @pytest.mark.asyncio
+    async def test_404_after_success_drops_cached_values(self, hass):
+        from custom_components.epson_workforce.coordinator import (
+            _PATH_MENTINFO,
+            SUPPLEMENTAL_INTERVAL,
+        )
+
+        coordinator = _make_coordinator(hass)
+        responses = self._supplemental_responses()
+        session = self._mock_session(responses)
+
+        with self._patch_sessions(session):
+            await coordinator._async_update_data()
+            self._age_supplemental(coordinator, SUPPLEMENTAL_INTERVAL)
+            responses[_PATH_MENTINFO] = (404, "")
+            data = await coordinator._async_update_data()
+
+        assert "total_pages" not in data
+        assert _PATH_MENTINFO in coordinator._supplemental_404
