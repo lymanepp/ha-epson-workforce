@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from unittest.mock import patch
 
-from homeassistant.config_entries import ConfigEntryState
+from homeassistant.config_entries import ConfigEntryDisabler, ConfigEntryState
 from homeassistant.const import CONF_HOST
 from homeassistant.helpers import device_registry as dr, entity_registry as er
 import pytest
@@ -110,3 +110,37 @@ async def test_legacy_device_is_rekeyed_and_keeps_entities(hass):
     assert devices[0].identifiers == {(DOMAIN, entry.entry_id)}
     assert devices[0].connections == set()
     assert ent_reg.async_get(ent.entity_id).device_id == old.id
+
+
+async def test_other_entrys_identifier_survives_migration(hass):
+    """Older HA can share one device between two entries for the same printer.
+
+    Migrating one entry must not remove the other entry's identifier, or the
+    two entries keep swapping the device's identifier on every restart.
+    """
+    other = MockConfigEntry(
+        domain=DOMAIN,
+        unique_id="printer.local",
+        data={CONF_HOST: "printer.local"},
+        disabled_by=ConfigEntryDisabler.USER,
+    )
+    other.add_to_hass(hass)
+    entry = _entry(hass)
+    dev_reg = dr.async_get(hass)
+    shared = dev_reg.async_get_or_create(
+        config_entry_id=entry.entry_id,
+        identifiers={(DOMAIN, HOST), (DOMAIN, other.entry_id)},
+        connections={(dr.CONNECTION_NETWORK_MAC, UID)},
+    )
+
+    await _setup(hass, entry, _data())
+    expected = {(DOMAIN, entry.entry_id), (DOMAIN, other.entry_id)}
+    assert dev_reg.async_get(shared.id).identifiers == expected
+
+    with patch(
+        "custom_components.epson_workforce.coordinator.EpsonCoordinator._async_update_data",
+        return_value=_data(),
+    ):
+        assert await hass.config_entries.async_reload(entry.entry_id)
+        await hass.async_block_till_done()
+    assert dev_reg.async_get(shared.id).identifiers == expected

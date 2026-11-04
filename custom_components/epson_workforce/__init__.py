@@ -47,13 +47,20 @@ def _async_migrate_device(hass: HomeAssistant, entry: EpsonConfigEntry) -> None:
     Devices used to be identified by host, so changing the printer's address
     would have created a second device. Also drop placeholder MAC connections
     that some firmware reports, since they would merge unrelated printers.
+
+    Only host-based identifiers are removed. Older Home Assistant versions can
+    share one device between two entries for the same printer; each entry's
+    own identifier must survive the other entry's migration.
     """
     dev_reg = dr.async_get(hass)
     new_identifier = (DOMAIN, entry.entry_id)
+    entry_ids = {e.entry_id for e in hass.config_entries.async_entries(DOMAIN)}
     devices = dr.async_entries_for_config_entry(dev_reg, entry.entry_id)
     migrated = {d.id for d in devices if new_identifier in d.identifiers}
     for device in devices:
-        old = {i for i in device.identifiers if i[0] == DOMAIN and i != new_identifier}
+        old = {
+            i for i in device.identifiers if i[0] == DOMAIN and i[1] not in entry_ids
+        }
         bad_connections = device.connections & _PLACEHOLDER_MAC_CONNECTIONS
         if not old and not bad_connections:
             continue
