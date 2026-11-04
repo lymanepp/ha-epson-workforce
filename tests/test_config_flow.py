@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+from ipaddress import ip_address
 from unittest.mock import AsyncMock, patch
 
 from homeassistant import config_entries
 from homeassistant.const import CONF_HOST
 from homeassistant.data_entry_flow import FlowResultType
+from homeassistant.helpers.service_info.zeroconf import ZeroconfServiceInfo
 import pytest
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
@@ -201,3 +203,117 @@ async def test_reconfigure_cannot_connect(hass):
 
     assert result["type"] is FlowResultType.FORM
     assert result["errors"] == {"base": "cannot_connect"}
+
+
+# --- zeroconf discovery ---
+
+
+def _zeroconf(*addresses: str) -> ZeroconfServiceInfo:
+    ips = [ip_address(a) for a in addresses or ("10.0.0.5",)]
+    return ZeroconfServiceInfo(
+        ip_address=ips[0],
+        ip_addresses=ips,
+        port=631,
+        hostname="EPSON0C85BF.local.",
+        type="_ipp._tcp.local.",
+        name="EPSON ET-4950 Series._ipp._tcp.local.",
+        properties={"usb_MFG": "EPSON", "usb_MDL": "ET-4950 Series"},
+    )
+
+
+async def _discover(hass, info: ZeroconfServiceInfo):
+    return await hass.config_entries.flow.async_init(
+        DOMAIN, context={"source": config_entries.SOURCE_ZEROCONF}, data=info
+    )
+
+
+async def test_zeroconf_new_printer_is_confirmed_then_created(hass):
+    with _probe({"mac_address": MAC, "model": "Epson ET-4950 Series"}):
+        result = await _discover(hass, _zeroconf())
+
+    assert result["type"] is FlowResultType.FORM
+    assert result["step_id"] == "discovery_confirm"
+    assert result["description_placeholders"] == {
+        "model": "Epson ET-4950 Series",
+        "host": "10.0.0.5",
+    }
+    flow = hass.config_entries.flow.async_get(result["flow_id"])
+    assert flow["context"]["title_placeholders"] == {"name": "Epson ET-4950 Series"}
+
+    result = await hass.config_entries.flow.async_configure(result["flow_id"], {})
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    assert result["data"] == {CONF_HOST: "10.0.0.5"}
+    assert result["result"].unique_id == UID
+
+
+async def test_zeroconf_known_printer_at_new_address_updates_host(hass):
+    entry = MockConfigEntry(domain=DOMAIN, unique_id=UID, data={CONF_HOST: "10.0.0.9"})
+    entry.add_to_hass(hass)
+
+    with _probe({"mac_address": MAC}):
+        result = await _discover(hass, _zeroconf("10.0.0.5"))
+
+    assert result["type"] is FlowResultType.ABORT
+    assert result["reason"] == "already_configured"
+    assert entry.data[CONF_HOST] == "10.0.0.5"
+
+
+async def test_zeroconf_configured_address_aborts_without_probing(hass):
+    MockConfigEntry(
+        domain=DOMAIN, unique_id=UID, data={CONF_HOST: "10.0.0.5"}
+    ).add_to_hass(hass)
+
+    with _probe(None) as probe:
+        result = await _discover(hass, _zeroconf("10.0.0.5"))
+
+    assert result["type"] is FlowResultType.ABORT
+    assert result["reason"] == "already_configured"
+    probe.assert_not_called()
+
+
+async def test_zeroconf_ignored_printer_stays_ignored(hass):
+    MockConfigEntry(
+        domain=DOMAIN,
+        unique_id=UID,
+        source=config_entries.SOURCE_IGNORE,
+        data={},
+    ).add_to_hass(hass)
+
+    with _probe({"mac_address": MAC}):
+        result = await _discover(hass, _zeroconf())
+
+    assert result["type"] is FlowResultType.ABORT
+    assert result["reason"] == "already_configured"
+
+
+async def test_zeroconf_not_a_web_config_printer(hass):
+    with _probe(None):
+        result = await _discover(hass, _zeroconf())
+
+    assert result["type"] is FlowResultType.ABORT
+    assert result["reason"] == "cannot_connect"
+
+
+async def test_zeroconf_prefers_ipv4(hass):
+    with _probe({"mac_address": MAC}) as probe:
+        result = await _discover(hass, _zeroconf("2001:db8::5", "10.0.0.5"))
+
+    assert result["description_placeholders"]["host"] == "10.0.0.5"
+    assert probe.call_args.args[1] == "10.0.0.5"
+
+
+async def test_zeroconf_ipv6_only_is_rejected(hass):
+    with _probe({"mac_address": MAC}) as probe:
+        result = await _discover(hass, _zeroconf("2001:db8::5"))
+
+    assert result["type"] is FlowResultType.ABORT
+    assert result["reason"] == "not_ipv4_address"
+    probe.assert_not_called()
+
+
+async def test_zeroconf_printer_without_mac_uses_host(hass):
+    with _probe({"model": "Epson WF-2510 Series"}):
+        result = await _discover(hass, _zeroconf())
+        result = await hass.config_entries.flow.async_configure(result["flow_id"], {})
+
+    assert result["result"].unique_id == "10.0.0.5"
