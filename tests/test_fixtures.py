@@ -147,7 +147,6 @@ EXPECTATIONS: dict[str, dict[str, Any]] = {
         "model": "Epson WF-7840 Series",
         "printer_status": "Available",
         "scanner_status": "Available",
-        "mac_address": "00:00:00:00:00:00",
         "ip_address": "192.168.0.1",
         "maintenance_box": 70,
         "inks": {
@@ -227,9 +226,9 @@ def _assert_subset(
             assert isinstance(actual[k], dict), f"Expected dict at {path}/{k}"
             _assert_subset(actual[k], v, f"{path}/{k}" if path else k)
         else:
-            assert (
-                actual[k] == v
-            ), f"Mismatch at {path}/{k if path else k}: {actual[k]!r} != {v!r}"
+            assert actual[k] == v, (
+                f"Mismatch at {path}/{k if path else k}: {actual[k]!r} != {v!r}"
+            )
 
 
 @pytest.mark.parametrize("fixture_name", ALL_FIXTURES)
@@ -274,3 +273,31 @@ def test_each_fixture_parses_and_matches_expectations(fixture_name: str):
             _assert_subset(
                 data.get("wifi_direct", {}), spec["wifi_direct"], path="wifi_direct"
             )
+
+
+def test_placeholder_mac_is_ignored():
+    """WF-7840 reports 00:00:00:00:00:00, which must not identify a device."""
+    data = EpsonHTMLParser(_read_fixture_text("WF-7840.html")).parse()
+    assert "mac_address" not in data
+
+
+def test_mac_comes_from_network_table_not_wifi_direct():
+    """ET-16500's localized page also lists the Wi-Fi Direct MAC."""
+    data = EpsonHTMLParser(_read_fixture_text("ET-16500.html")).parse()
+    assert data["mac_address"] == "44:D2:44:FB:CC:F7"
+
+
+def test_mac_found_by_value_when_label_is_localized():
+    html = (
+        "<html><head><title>XP-4200 Series</title></head><body>"
+        "<div id='info-network'><table>"
+        "<tr><td class='item-key'>Wi-Fi-Direct-Status :</td>"
+        "<td class='item-value'>Aus</td></tr>"
+        "<tr><td class='item-key'>MAC-Adresse :</td>"
+        "<td class='item-value'>AA:BB:CC:DD:EE:01</td></tr>"
+        "</table></div>"
+        "<div id='info-wfd'><p>AA:BB:CC:DD:EE:02</p></div>"
+        "<p>00:00:00:00:00:00</p>"
+        "</body></html>"
+    )
+    assert EpsonHTMLParser(html).parse()["mac_address"] == "AA:BB:CC:DD:EE:01"

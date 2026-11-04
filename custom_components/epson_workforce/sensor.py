@@ -9,7 +9,11 @@ from homeassistant.components.sensor import (
 )
 from homeassistant.const import PERCENTAGE
 from homeassistant.core import HomeAssistant, callback
-from homeassistant.helpers.device_registry import DeviceInfo
+from homeassistant.helpers.device_registry import (
+    CONNECTION_NETWORK_MAC,
+    DeviceInfo,
+    format_mac,
+)
 from homeassistant.helpers.entity import EntityCategory
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
@@ -266,12 +270,13 @@ class EpsonSensor(CoordinatorEntity[EpsonCoordinator], SensorEntity):
         self.entity_description = description
         self._attr_unique_id = f"{entry.entry_id}_{description.key}"
         self._attr_device_info = DeviceInfo(
-            identifiers={(DOMAIN, coordinator.host)},
+            # Keyed by entry, not host, so a new printer address keeps the device.
+            identifiers={(DOMAIN, entry.entry_id)},
             name=coordinator.data.get("_name") or f"Epson {coordinator.host}",
             manufacturer="Epson",
             model=coordinator.data.get("_model"),
             connections=(
-                {("mac", coordinator.data["_mac"].lower())}
+                {(CONNECTION_NETWORK_MAC, format_mac(coordinator.data["_mac"]))}
                 if coordinator.data.get("_mac")
                 else set()
             ),
