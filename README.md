@@ -68,6 +68,8 @@ Enter your printer's IP address when prompted. The integration will connect, det
 > - Print a network status sheet from the printer's menu
 > - Assign a static IP or DHCP reservation in your router to prevent the address from changing
 
+**If the printer's IP address changes**, open the integration's menu (⋮) and choose **Reconfigure** to enter the new address. Sensors, entity IDs, and history are kept.
+
 ## Sensors
 
 Sensors are created automatically based on what your specific printer reports. Sensors that are not available on your printer (e.g. a fax status sensor on a non-fax model) are simply not created.

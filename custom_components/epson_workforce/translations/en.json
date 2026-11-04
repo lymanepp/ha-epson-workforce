@@ -7,13 +7,22 @@
         "data": {
           "host": "IP Address"
         }
+      },
+      "reconfigure": {
+        "title": "Change printer address",
+        "description": "Enter the new IP address or hostname of this Epson printer. Its sensors and history are kept.",
+        "data": {
+          "host": "IP Address"
+        }
       }
     },
     "error": {
       "cannot_connect": "Failed to connect. Check the IP address and ensure the printer is on the network."
     },
     "abort": {
-      "already_configured": "This printer is already configured."
+      "already_configured": "This printer is already configured.",
+      "reconfigure_successful": "The printer address was updated.",
+      "wrong_printer": "A different printer answered at that address. Enter the address of the printer that this entry was set up with."
     }
   }
 }

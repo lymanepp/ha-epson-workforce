@@ -17,6 +17,19 @@ RE_IPV4 = re.compile(
     r"(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)\b"
 )
 RE_MAC = re.compile(r"\b([0-9A-F]{2}:){5}[0-9A-F]{2}\b", re.IGNORECASE)
+# Placeholder MACs some firmware reports (e.g. WF-7840 shows all zeros).
+# They are not unique, so they must never identify a device.
+_INVALID_MACS = frozenset({"00:00:00:00:00:00", "FF:FF:FF:FF:FF:FF"})
+
+
+def _valid_mac(value: str | None) -> str | None:
+    """Return the MAC if it is a usable, real MAC address."""
+    if not value:
+        return None
+    value = value.strip()
+    if not RE_MAC.fullmatch(value) or value.upper() in _INVALID_MACS:
+        return None
+    return value
 
 
 # ----------------------------
@@ -75,11 +88,7 @@ class EpsonHTMLParser:
             out["name"] = name
 
         # MAC/IP: prefer table fields, fall back to text search
-        mac = (
-            network.get("MAC Address")
-            or network.get("MAC address")
-            or self._extract_mac_from_text()
-        )
+        mac = self._find_mac(network)
         if mac:
             out["mac_address"] = mac
 
@@ -277,10 +286,27 @@ class EpsonHTMLParser:
         return result
 
     # --- misc fallbacks (value-pattern based) ---
+    def _find_mac(self, network: dict[str, str]) -> str | None:
+        """Return the printer's own MAC address.
+
+        The main page keeps the printer's own language, so the English label
+        often misses. A MAC-shaped value inside the network table is the next
+        best source: the whole-page search can also see the Wi-Fi Direct MAC.
+        """
+        for key in ("MAC Address", "MAC address"):
+            if mac := _valid_mac(network.get(key)):
+                return mac
+        for value in network.values():
+            if mac := _valid_mac(value):
+                return mac
+        return self._extract_mac_from_text()
+
     def _extract_mac_from_text(self) -> str | None:
         txt = self.soup.get_text(" ", strip=True)
-        m = RE_MAC.search(txt)
-        return m.group(0) if m else None
+        for m in RE_MAC.finditer(txt):
+            if mac := _valid_mac(m.group(0)):
+                return mac
+        return None
 
     def _extract_ip_from_text(self) -> str | None:
         txt = self.soup.get_text(" ", strip=True)
