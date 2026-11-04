@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import asyncio
-from datetime import timedelta
+from datetime import datetime, timedelta
 import logging
 import re
 from typing import Any
@@ -14,12 +14,20 @@ from homeassistant.const import CONF_HOST
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.aiohttp_client import async_create_clientsession
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
+from homeassistant.util import dt as dt_util
 
 from .parser import EpsonHTMLParser
 
 _LOGGER = logging.getLogger(__name__)
 
 SCAN_INTERVAL = timedelta(seconds=60)
+# Usage counters, network details and hardware status change slowly, so the
+# supplemental pages are fetched far less often than the main status page.
+SUPPLEMENTAL_INTERVAL = timedelta(minutes=5)
+# If a supplemental page keeps failing, its last good values are kept this long
+# so a brief failure doesn't turn those sensors "unknown"; after that they are
+# dropped rather than shown indefinitely.
+SUPPLEMENTAL_MAX_AGE = timedelta(minutes=30)
 
 _PATH_MAIN = "/PRESENTATION/HTML/TOP/PRTINFO.HTML"
 _PATH_MAIN_INDEX = "/PRESENTATION/HTML/TOP/INDEX.HTML"
@@ -184,6 +192,8 @@ class EpsonCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         # normal polling cycles.
         self._main_path = _PATH_MAIN
         self._supplemental_404: set[str] = set()
+        # Last good parse of each supplemental page and when it was fetched.
+        self._supplemental: dict[str, tuple[datetime, dict]] = {}
         self._language_warned = False
         self._web_config_session: aiohttp.ClientSession | None = None
         super().__init__(
@@ -209,36 +219,7 @@ class EpsonCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             list(raw.get("inks", {}).keys()),
         )
 
-        # Fetch supplemental pages concurrently; 404s are permanently skipped,
-        # other errors are transient and retried next cycle.
-        pending = [
-            (key, path, page_parser)
-            for key, path, page_parser in _SUPPLEMENTAL
-            if path not in self._supplemental_404
-        ]
-        if pending:
-            _LOGGER.debug(
-                "Fetching %d supplemental page(s): %s",
-                len(pending),
-                [path for _, path, _ in pending],
-            )
-        sup_results = await asyncio.gather(
-            *[
-                self._fetch_supplemental(key, path, page_parser)
-                for key, path, page_parser in pending
-            ],
-            return_exceptions=False,
-        )
-        sup: dict[str, dict] = {}
-        for item in sup_results:
-            if item is not None:
-                sup[item[0]] = item[1]
-
-        _LOGGER.debug(
-            "Supplemental pages received: %s  |  permanently skipped (404): %s",
-            list(sup.keys()),
-            [p.split("/")[-1] for p in self._supplemental_404],
-        )
+        sup = await self._update_supplemental()
 
         data = _build_data(raw, sup)
         self._warn_if_not_english(sup)
@@ -248,6 +229,59 @@ class EpsonCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             [k for k in data if not k.startswith("_")],
         )
         return data
+
+    async def _update_supplemental(self) -> dict[str, dict]:
+        """Refresh supplemental pages that are due and return the usable ones.
+
+        A page is due when it has no data yet or its data is older than
+        SUPPLEMENTAL_INTERVAL. Pages are fetched concurrently. A 404 means the
+        page doesn't exist on this model, so it is never requested again; any
+        other failure keeps the last good data (up to SUPPLEMENTAL_MAX_AGE)
+        and is retried on the next cycle.
+        """
+        now = dt_util.utcnow()
+        due = [
+            (key, path, page_parser)
+            for key, path, page_parser in _SUPPLEMENTAL
+            if path not in self._supplemental_404
+            and (
+                key not in self._supplemental
+                or now - self._supplemental[key][0] >= SUPPLEMENTAL_INTERVAL
+            )
+        ]
+        if due:
+            _LOGGER.debug(
+                "Fetching %d supplemental page(s): %s",
+                len(due),
+                [path for _, path, _ in due],
+            )
+            results = await asyncio.gather(
+                *[
+                    self._fetch_supplemental(key, path, page_parser)
+                    for key, path, page_parser in due
+                ]
+            )
+            for item in results:
+                if item is not None:
+                    self._supplemental[item[0]] = (now, item[1])
+
+        sup: dict[str, dict] = {}
+        for key, path, _ in _SUPPLEMENTAL:
+            if key not in self._supplemental:
+                continue
+            fetched, page = self._supplemental[key]
+            if path in self._supplemental_404 or now - fetched > SUPPLEMENTAL_MAX_AGE:
+                _LOGGER.debug("Dropping stale %s data from %s", key, fetched)
+                del self._supplemental[key]
+                continue
+            sup[key] = page
+
+        _LOGGER.debug(
+            "Supplemental pages in use: %s  |  permanently skipped (404): %s",
+            list(sup),
+            [p.split("/")[-1] for p in self._supplemental_404],
+        )
+        return sup
 
     def _warn_if_not_english(self, sup: dict[str, dict]) -> None:
         """Warn once when the usage page has no recognized English labels.

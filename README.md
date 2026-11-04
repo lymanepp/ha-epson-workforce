@@ -130,6 +130,8 @@ In addition to the main status page, the integration attempts to fetch three sup
 
 These pages return 404 on older or lower-end models. That is normal — the integration detects this on the first poll and stops requesting those pages. The corresponding sensors simply will not be created.
 
+These values change slowly, so the supplemental pages are refreshed every 5 minutes rather than every poll. If one fails temporarily, its sensors keep their last values for up to 30 minutes instead of becoming unknown.
+
 ### Common issues
 
 **No sensors created after setup**
