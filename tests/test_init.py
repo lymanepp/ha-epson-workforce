@@ -7,6 +7,7 @@ from unittest.mock import patch
 from homeassistant.config_entries import ConfigEntryDisabler, ConfigEntryState
 from homeassistant.const import CONF_HOST
 from homeassistant.helpers import device_registry as dr, entity_registry as er
+from homeassistant.helpers.update_coordinator import UpdateFailed
 import pytest
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
@@ -144,3 +145,56 @@ async def test_other_entrys_identifier_survives_migration(hass):
         assert await hass.config_entries.async_reload(entry.entry_id)
         await hass.async_block_till_done()
     assert dev_reg.async_get(shared.id).identifiers == expected
+
+
+_UPDATE = (
+    "custom_components.epson_workforce.coordinator.EpsonCoordinator._async_update_data"
+)
+
+
+async def test_printer_off_at_startup_loads_and_recovers(hass):
+    """A powered-off printer must not fail setup (#66).
+
+    The entry loads instead of retrying setup, and sensors come back
+    (including the MAC unique-ID migration) once the printer answers.
+    """
+    entry = _entry(hass)
+    ent = er.async_get(hass).async_get_or_create(
+        "sensor", DOMAIN, f"{entry.entry_id}_ink_bk", config_entry=entry
+    )
+
+    with patch(_UPDATE, side_effect=UpdateFailed("printer off")):
+        assert await hass.config_entries.async_setup(entry.entry_id)
+        await hass.async_block_till_done()
+    assert entry.state is ConfigEntryState.LOADED
+    # Not created yet; at startup HA marks registered entities unavailable.
+    assert hass.states.get(ent.entity_id) is None
+    assert entry.unique_id == HOST
+
+    with patch(_UPDATE, return_value=_data()):
+        await entry.runtime_data.async_refresh()
+        await hass.async_block_till_done()
+    assert hass.states.get(ent.entity_id).state == "50"
+    assert entry.unique_id == UID
+
+
+async def test_unload_while_printer_still_off(hass):
+    entry = _entry(hass)
+    with patch(_UPDATE, side_effect=UpdateFailed("printer off")):
+        assert await hass.config_entries.async_setup(entry.entry_id)
+        await hass.async_block_till_done()
+    assert await hass.config_entries.async_unload(entry.entry_id)
+    assert entry.state is ConfigEntryState.NOT_LOADED
+
+
+async def test_unload_after_printer_came_back(hass):
+    """The one-shot listener is removed on first data and again on unload."""
+    entry = _entry(hass)
+    with patch(_UPDATE, side_effect=UpdateFailed("printer off")):
+        assert await hass.config_entries.async_setup(entry.entry_id)
+        await hass.async_block_till_done()
+    with patch(_UPDATE, return_value=_data()):
+        await entry.runtime_data.async_refresh()
+        await hass.async_block_till_done()
+    assert await hass.config_entries.async_unload(entry.entry_id)
+    assert entry.state is ConfigEntryState.NOT_LOADED

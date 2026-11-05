@@ -316,7 +316,7 @@ class EpsonCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         also prevents a stale shared-session language cookie from changing the
         localized status strings we intentionally preserve.
 
-        The first call happens during the config entry's first refresh, so Home
+        The first call happens during the refresh in the entry's setup, so Home
         Assistant ties the session to the entry and detaches it on unload or
         failed setup. Keep that first call inside setup, or that cleanup is lost.
         """

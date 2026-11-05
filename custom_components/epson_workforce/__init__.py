@@ -6,7 +6,7 @@ import logging
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_HOST, Platform
-from homeassistant.core import HomeAssistant, callback
+from homeassistant.core import CALLBACK_TYPE, HomeAssistant, callback
 from homeassistant.helpers import device_registry as dr
 
 from .const import DOMAIN
@@ -28,8 +28,37 @@ async def async_setup_entry(hass: HomeAssistant, entry: EpsonConfigEntry) -> boo
     """Set up Epson WorkForce from a config entry."""
     _async_migrate_device(hass, entry)
     coordinator = EpsonCoordinator(hass, entry)
-    await coordinator.async_config_entry_first_refresh()
-    _async_migrate_unique_id(hass, entry, coordinator)
+    # A printer that is switched off is normal, not a setup error. Load anyway:
+    # existing entities show as unavailable and the coordinator keeps polling,
+    # so sensors come back once the printer answers.
+    await coordinator.async_refresh()
+    if coordinator.data is not None:
+        _async_migrate_unique_id(hass, entry, coordinator)
+    else:
+        _LOGGER.info(
+            "Printer at %s is not reachable; will keep trying", entry.data[CONF_HOST]
+        )
+
+        @callback
+        def _async_first_data() -> None:
+            if coordinator.data is None:
+                return
+            _async_remove()
+            _async_migrate_unique_id(hass, entry, coordinator)
+
+        remove_listener: CALLBACK_TYPE | None = coordinator.async_add_listener(
+            _async_first_data
+        )
+
+        @callback
+        def _async_remove() -> None:
+            # Runs on first data and again on unload; remove only once.
+            nonlocal remove_listener
+            if remove_listener is not None:
+                remove_listener()
+                remove_listener = None
+
+        entry.async_on_unload(_async_remove)
     entry.runtime_data = coordinator
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     return True
