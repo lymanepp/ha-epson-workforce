@@ -90,8 +90,13 @@ class EpsonConfigFlow(ConfigFlow, domain=DOMAIN):  # type: ignore[call-arg]
             return self.async_abort(reason="not_ipv4_address")
 
         # Already configured at this address: nothing to do, and no need to
-        # contact the printer on every Home Assistant start.
-        self._async_abort_entries_match({CONF_HOST: host})
+        # contact the printer on every Home Assistant start. Setting the entry's
+        # unique ID lets HA record this discovery on the entry, so the printer
+        # is offered again right away if the entry is deleted.
+        for entry in self._async_current_entries(include_ignore=False):
+            if entry.data.get(CONF_HOST) == host and entry.unique_id:
+                await self.async_set_unique_id(entry.unique_id)
+                self._abort_if_unique_id_configured()
 
         raw = await self._async_probe(host)
         if raw is None:

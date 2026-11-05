@@ -6,8 +6,10 @@ from ipaddress import ip_address
 from unittest.mock import AsyncMock, patch
 
 from homeassistant import config_entries
+from homeassistant.config_entries import DiscoveryKey
 from homeassistant.const import CONF_HOST
 from homeassistant.data_entry_flow import FlowResultType
+from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers.service_info.zeroconf import ZeroconfServiceInfo
 import pytest
 from pytest_homeassistant_custom_component.common import MockConfigEntry
@@ -221,9 +223,19 @@ def _zeroconf(*addresses: str) -> ZeroconfServiceInfo:
     )
 
 
+def _discovery_key(info: ZeroconfServiceInfo) -> DiscoveryKey:
+    return DiscoveryKey(domain="zeroconf", key=(info.type, info.name), version=1)
+
+
 async def _discover(hass, info: ZeroconfServiceInfo):
+    """Start a flow the way HA's zeroconf component does, discovery key included."""
     return await hass.config_entries.flow.async_init(
-        DOMAIN, context={"source": config_entries.SOURCE_ZEROCONF}, data=info
+        DOMAIN,
+        context={
+            "source": config_entries.SOURCE_ZEROCONF,
+            "discovery_key": _discovery_key(info),
+        },
+        data=info,
     )
 
 
@@ -259,16 +271,49 @@ async def test_zeroconf_known_printer_at_new_address_updates_host(hass):
 
 
 async def test_zeroconf_configured_address_aborts_without_probing(hass):
-    MockConfigEntry(
-        domain=DOMAIN, unique_id=UID, data={CONF_HOST: "10.0.0.5"}
-    ).add_to_hass(hass)
+    entry = MockConfigEntry(domain=DOMAIN, unique_id=UID, data={CONF_HOST: "10.0.0.5"})
+    entry.add_to_hass(hass)
+    info = _zeroconf("10.0.0.5")
 
     with _probe(None) as probe:
-        result = await _discover(hass, _zeroconf("10.0.0.5"))
+        result = await _discover(hass, info)
 
     assert result["type"] is FlowResultType.ABORT
     assert result["reason"] == "already_configured"
     probe.assert_not_called()
+    # Recorded so that deleting the entry offers the printer again right away.
+    assert entry.discovery_keys["zeroconf"] == (_discovery_key(info),)
+
+
+async def test_zeroconf_deleting_discovered_entry_triggers_rediscovery(hass):
+    """HA re-runs zeroconf discovery for keys recorded on a removed entry."""
+    entry = MockConfigEntry(domain=DOMAIN, unique_id=UID, data={CONF_HOST: "10.0.0.5"})
+    entry.add_to_hass(hass)
+    with _probe(None):
+        await _discover(hass, _zeroconf("10.0.0.5"))
+
+    removed = []
+    async_dispatcher_connect(
+        hass,
+        config_entries.signal_discovered_config_entry_removed("zeroconf"),
+        removed.append,
+    )
+    await hass.config_entries.async_remove(entry.entry_id)
+    await hass.async_block_till_done()
+
+    assert [e.entry_id for e in removed] == [entry.entry_id]
+
+
+async def test_zeroconf_configured_address_without_unique_id_is_probed(hass):
+    entry = MockConfigEntry(domain=DOMAIN, unique_id=None, data={CONF_HOST: "10.0.0.5"})
+    entry.add_to_hass(hass)
+
+    with _probe({"mac_address": MAC}) as probe:
+        result = await _discover(hass, _zeroconf("10.0.0.5"))
+
+    probe.assert_called_once()
+    assert result["type"] is FlowResultType.FORM
+    assert result["step_id"] == "discovery_confirm"
 
 
 async def test_zeroconf_ignored_printer_stays_ignored(hass):
