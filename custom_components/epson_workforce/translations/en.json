@@ -40,6 +40,9 @@
       }
     },
     "sensor": {
+      "last_nozzle_check": {
+        "name": "Last nozzle check"
+      },
       "ink_bk": {
         "name": "Ink level Black"
       },

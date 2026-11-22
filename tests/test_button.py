@@ -2,16 +2,26 @@
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
 from unittest.mock import patch
 
 from homeassistant.components.button import DOMAIN as BUTTON_DOMAIN, SERVICE_PRESS
 from homeassistant.config_entries import ConfigEntryState
-from homeassistant.const import ATTR_ENTITY_ID, CONF_HOST, STATE_UNAVAILABLE
+from homeassistant.const import (
+    ATTR_ENTITY_ID,
+    CONF_HOST,
+    STATE_UNAVAILABLE,
+    STATE_UNKNOWN,
+)
+from homeassistant.core import State
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import device_registry as dr, entity_registry as er
 from homeassistant.helpers.update_coordinator import UpdateFailed
 import pytest
-from pytest_homeassistant_custom_component.common import MockConfigEntry
+from pytest_homeassistant_custom_component.common import (
+    MockConfigEntry,
+    mock_restore_cache_with_extra_data,
+)
 
 from custom_components.epson_workforce.const import DOMAIN
 from custom_components.epson_workforce.maintenance import PrinterCommandError
@@ -90,6 +100,77 @@ async def test_press_failure_raises(hass):
         "host": HOST,
         "error": "connection refused",
     }
+
+
+def _sensor_entity_id(hass, entry) -> str | None:
+    return er.async_get(hass).async_get_entity_id(
+        "sensor", DOMAIN, f"{entry.entry_id}_last_nozzle_check"
+    )
+
+
+async def test_successful_press_updates_last_nozzle_check(hass, freezer):
+    freezer.move_to("2026-11-22 10:00:00+00:00")
+    entry = await _setup(hass)
+    sensor_id = _sensor_entity_id(hass, entry)
+    assert sensor_id == "sensor.epson123456_last_nozzle_check"
+    assert hass.states.get(sensor_id).state == STATE_UNKNOWN
+
+    with patch(_PRINT):
+        await _press(hass, _button_entity_id(hass, entry))
+
+    assert hass.states.get(sensor_id).state == "2026-11-22T10:00:00+00:00"
+
+
+async def test_failed_press_keeps_last_nozzle_check(hass):
+    entry = await _setup(hass)
+    sensor_id = _sensor_entity_id(hass, entry)
+
+    with (
+        patch(_PRINT, side_effect=PrinterCommandError("connection refused")),
+        pytest.raises(HomeAssistantError),
+    ):
+        await _press(hass, _button_entity_id(hass, entry))
+
+    assert hass.states.get(sensor_id).state == STATE_UNKNOWN
+
+
+async def test_last_nozzle_check_restored(hass):
+    last = datetime(2026, 11, 15, 10, 0, tzinfo=UTC)
+    mock_restore_cache_with_extra_data(
+        hass,
+        [
+            (
+                State("sensor.epson123456_last_nozzle_check", last.isoformat()),
+                {
+                    "native_value": {
+                        "__type": "<class 'datetime.datetime'>",
+                        "isoformat": last.isoformat(),
+                    },
+                    "native_unit_of_measurement": None,
+                },
+            )
+        ],
+    )
+    entry = await _setup(hass)
+
+    assert entry.runtime_data.last_nozzle_check == last
+    sensor_id = _sensor_entity_id(hass, entry)
+    assert hass.states.get(sensor_id).state == last.isoformat()
+
+
+async def test_last_nozzle_check_available_while_printer_offline(hass, freezer):
+    freezer.move_to("2026-11-22 10:00:00+00:00")
+    entry = await _setup(hass)
+    with patch(_PRINT):
+        await _press(hass, _button_entity_id(hass, entry))
+
+    with patch(_UPDATE, side_effect=UpdateFailed("offline")):
+        await entry.runtime_data.async_refresh()
+        await hass.async_block_till_done()
+
+    assert hass.states.get(_button_entity_id(hass, entry)).state == STATE_UNAVAILABLE
+    sensor_id = _sensor_entity_id(hass, entry)
+    assert hass.states.get(sensor_id).state == "2026-11-22T10:00:00+00:00"
 
 
 async def test_button_created_once_printer_answers(hass):

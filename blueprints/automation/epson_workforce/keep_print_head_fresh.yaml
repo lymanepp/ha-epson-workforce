@@ -1,0 +1,122 @@
+blueprint:
+  name: Keep Epson print head fresh
+  description: >-
+    Prints the printer's nozzle check pattern when the last nozzle check is at
+    least the chosen number of days ago, so the ink in a rarely used printer
+    does not dry out in the print head. The pattern uses every ink channel, no
+    matter what was printed in between.
+
+
+    Pressing the **Nozzle check** button by hand also restarts the interval.
+    If the nozzle check cannot be sent (for example because the printer is
+    switched off), it is tried again the next day.
+
+
+    Requires the Epson WorkForce integration.
+  domain: automation
+  author: thecodingdad
+  source_url: https://github.com/lymanepp/ha-epson-workforce/blob/master/blueprints/automation/epson_workforce/keep_print_head_fresh.yaml
+  homeassistant:
+    min_version: "2025.3.0"
+  input:
+    printer:
+      name: Printer
+      icon: mdi:printer
+      input:
+        nozzle_check_button:
+          name: Nozzle check button
+          selector:
+            entity:
+              filter:
+                - integration: epson_workforce
+                  domain: button
+        last_nozzle_check_sensor:
+          name: Last nozzle check sensor
+          description: The "Last nozzle check" sensor of the same printer.
+          selector:
+            entity:
+              filter:
+                - integration: epson_workforce
+                  domain: sensor
+                  device_class: timestamp
+    schedule:
+      name: Schedule
+      icon: mdi:calendar-clock
+      input:
+        interval_days:
+          name: Interval
+          description: >-
+            Print the nozzle check when the last one is at least this many
+            days ago.
+          default: 7
+          selector:
+            number:
+              min: 1
+              max: 30
+              step: 1
+              unit_of_measurement: days
+              mode: slider
+        check_time:
+          name: Time of day
+          description: >-
+            When to check each day. Pick a time when the printer is usually
+            switched on and plain paper is loaded.
+          default: "10:00:00"
+          selector:
+            time: {}
+    actions:
+      name: Actions
+      icon: mdi:bell-outline
+      collapsed: true
+      input:
+        success_actions:
+          name: After the nozzle check was sent
+          description: Optional, e.g. a reminder to look at the printout.
+          default: []
+          selector:
+            action: {}
+        failure_actions:
+          name: When the nozzle check could not be sent
+          description: >-
+            Optional. The printer was unreachable or refused the job; the
+            nozzle check is tried again the next day.
+          default: []
+          selector:
+            action: {}
+
+mode: single
+max_exceeded: silent
+
+variables:
+  last_check_sensor: !input last_nozzle_check_sensor
+  interval_days: !input interval_days
+
+triggers:
+  - trigger: time
+    at: !input check_time
+
+conditions:
+  - alias: Last nozzle check is due
+    condition: template
+    value_template: >-
+      {% set last = states(last_check_sensor) | as_datetime %}
+      {{ last is none
+         or (now().date() - as_local(last).date()).days >= interval_days | int }}
+
+actions:
+  - variables:
+      previous_check: "{{ states(last_check_sensor) }}"
+  - alias: Send the nozzle check
+    action: button.press
+    target:
+      entity_id: !input nozzle_check_button
+    continue_on_error: true
+  - alias: Wait until the sensor confirms the nozzle check was sent
+    wait_template: "{{ states(last_check_sensor) != previous_check }}"
+    timeout: "00:01:00"
+    continue_on_timeout: true
+  - if:
+      - condition: template
+        value_template: "{{ wait.completed }}"
+    then: !input success_actions
+    else: !input failure_actions

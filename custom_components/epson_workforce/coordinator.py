@@ -196,6 +196,9 @@ class EpsonCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self._supplemental: dict[str, tuple[datetime, dict]] = {}
         self._language_warned = False
         self._web_config_session: aiohttp.ClientSession | None = None
+        # Set by the nozzle check button once the job was sent; the printer does
+        # not report it, so the last-nozzle-check sensor restores it on startup.
+        self.last_nozzle_check: datetime | None = None
         super().__init__(
             hass,
             _LOGGER,

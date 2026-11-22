@@ -40,6 +40,9 @@
       }
     },
     "sensor": {
+      "last_nozzle_check": {
+        "name": "Letzter Düsentest"
+      },
       "ink_bk": {
         "name": "Tintenstand Schwarz"
       },

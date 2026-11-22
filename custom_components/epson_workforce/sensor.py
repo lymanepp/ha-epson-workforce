@@ -2,7 +2,11 @@
 
 from __future__ import annotations
 
+from datetime import datetime
+
 from homeassistant.components.sensor import (
+    RestoreSensor,
+    SensorDeviceClass,
     SensorEntity,
     SensorEntityDescription,
     SensorStateClass,
@@ -236,17 +240,61 @@ async def async_setup_entry(
 
     @callback
     def _async_add_new_sensors() -> None:
-        data = coordinator.data or {}
+        data = coordinator.data
+        if data is None:
+            return
         new = [
             desc for desc in SENSOR_TYPES if desc.key in data and desc.key not in added
         ]
-        if not new:
-            return
+        entities: list[SensorEntity] = [
+            EpsonSensor(coordinator, entry, desc) for desc in new
+        ]
         added.update(desc.key for desc in new)
-        async_add_entities(EpsonSensor(coordinator, entry, desc) for desc in new)
+        if LAST_NOZZLE_CHECK.key not in added:
+            added.add(LAST_NOZZLE_CHECK.key)
+            entities.append(EpsonLastNozzleCheckSensor(coordinator, entry))
+        if entities:
+            async_add_entities(entities)
 
     _async_add_new_sensors()
     entry.async_on_unload(coordinator.async_add_listener(_async_add_new_sensors))
+
+
+LAST_NOZZLE_CHECK = SensorEntityDescription(  # type: ignore[call-arg]
+    key="last_nozzle_check",
+    translation_key="last_nozzle_check",
+    icon="mdi:printer-eye",
+    device_class=SensorDeviceClass.TIMESTAMP,
+)
+
+
+class EpsonLastNozzleCheckSensor(EpsonEntity, RestoreSensor):
+    """When Home Assistant last sent a nozzle check to the printer."""
+
+    entity_description = LAST_NOZZLE_CHECK
+
+    def __init__(self, coordinator: EpsonCoordinator, entry: EpsonConfigEntry) -> None:
+        super().__init__(coordinator, entry)
+        self._attr_unique_id = f"{entry.entry_id}_{LAST_NOZZLE_CHECK.key}"
+
+    async def async_added_to_hass(self) -> None:
+        """Restore the timestamp from before the last restart."""
+        await super().async_added_to_hass()
+        if self.coordinator.last_nozzle_check is not None:
+            return
+        last = await self.async_get_last_sensor_data()
+        if last is not None and isinstance(last.native_value, datetime):
+            self.coordinator.last_nozzle_check = last.native_value
+
+    @property
+    def available(self) -> bool:
+        """Stay available while the printer is offline; the value is ours."""
+        return True
+
+    @property
+    def native_value(self) -> datetime | None:
+        """Return when the last nozzle check was sent."""
+        return self.coordinator.last_nozzle_check
 
 
 class EpsonSensor(EpsonEntity, SensorEntity):

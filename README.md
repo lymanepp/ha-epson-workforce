@@ -82,6 +82,7 @@ Sensors are created automatically based on what your specific printer reports. S
 |---|---|
 | Ink level Black/Cyan/Magenta/Yellow/etc. | Ink or pigment level per cartridge, 0–100% |
 | Cleaning level | Maintenance box / waste ink pad level, 0–100% |
+| Last nozzle check | When the **Nozzle check** button last sent the pattern successfully (kept across restarts) |
 | Printer Status | Overall printer status (e.g. *Available*, *Printing*) |
 | Scanner Status | Scanner status on all-in-one models |
 | Fax Status | Fax hardware status on fax-capable models |
@@ -114,7 +115,19 @@ These sensors are created but hidden in the HA UI by default. Enable them indivi
 
 The nozzle check is sent as a raw print job to TCP port 9100 (RAW/JetDirect printing must be enabled in Web Config; most models enable it by default). Load plain paper before pressing it.
 
-Printing the pattern regularly keeps the print head from drying out on printers that are rarely used. For example, an automation can press the button once a week if **Total Pages Printed** has not changed in the last seven days. Avoid automating head cleaning instead: it uses much more ink and fills the maintenance box.
+Printing the pattern regularly keeps the print head from drying out on printers that are rarely used. Avoid automating head cleaning instead: it uses much more ink and fills the maintenance box.
+
+The button's own state is the time it was last pressed, even if sending failed. Use the **Last nozzle check** sensor in automations instead: it only changes when the nozzle check was sent.
+
+## Blueprint: Keep print head fresh
+
+[![Open your Home Assistant instance and show the blueprint import dialog with this blueprint pre-filled.](https://my.home-assistant.io/badges/blueprint_import.svg)](https://my.home-assistant.io/redirect/blueprint_import/?blueprint_url=https%3A%2F%2Fgithub.com%2Flymanepp%2Fha-epson-workforce%2Fblob%2Fmaster%2Fblueprints%2Fautomation%2Fepson_workforce%2Fkeep_print_head_fresh.yaml)
+
+Checks once a day and prints the nozzle check pattern when the last nozzle check is at least the chosen number of days ago (default 7). The pattern uses every ink channel, so it also keeps colors fresh that a black-only print would not touch. Pressing the button by hand restarts the interval. If the nozzle check cannot be sent, for example because the printer is off, it is tried again the next day.
+
+Optional actions can run after the nozzle check was sent (e.g. a reminder to look at the printout) and when it could not be sent.
+
+The blueprint only knows that the job was sent, not that the page was printed: if the printer is out of paper, it waits until paper is loaded.
 
 ## Troubleshooting
 

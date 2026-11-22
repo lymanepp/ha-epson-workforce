@@ -6,6 +6,7 @@ from homeassistant.components.button import ButtonEntity
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
+from homeassistant.util import dt as dt_util
 
 from . import EpsonConfigEntry
 from .const import DOMAIN
@@ -62,3 +63,7 @@ class EpsonNozzleCheckButton(EpsonEntity, ButtonEntity):
                     "error": str(err),
                 },
             ) from err
+        # The button's own state is set before the press runs, even when it
+        # fails, so successful runs are tracked separately for automations.
+        self.coordinator.last_nozzle_check = dt_util.utcnow()
+        self.coordinator.async_update_listeners()
