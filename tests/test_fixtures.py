@@ -31,6 +31,7 @@ EXPECTATIONS: dict[str, dict[str, Any]] = {
         },
     },
     "WF-2930.html": {
+        "printer_status": "Dostępny",  # Polish; label is "Status drukarki"
         "inks": {
             "BK": 84,
             "Y": 28,
@@ -301,3 +302,20 @@ def test_mac_found_by_value_when_label_is_localized():
         "</body></html>"
     )
     assert EpsonHTMLParser(html).parse()["mac_address"] == "AA:BB:CC:DD:EE:01"
+
+
+def test_status_label_is_dropped_in_any_language():
+    """The <legend> label is localized; only the status itself is kept."""
+    html = (
+        "<html><head><title>ET-8500 Series</title></head><body>"
+        '<fieldset id="PRT_STATUS" class="information-first clearfix">'
+        '<legend class="key">Druckerstatus</legend>'
+        "<ul class='clearfix'><li><div class=\"preserve-white-space\">"
+        "Verfügbar</div></li></ul></fieldset>"
+        '<fieldset id="SCN_STATUS"><legend class="key">Scannerstatus</legend>'
+        "<ul><li><div>Verfügbar.</div></li></ul></fieldset>"
+        "</body></html>"
+    )
+    data = EpsonHTMLParser(html).parse()
+    assert data["printer_status"] == "Verfügbar"
+    assert data["scanner_status"] == "Verfügbar"
