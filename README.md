@@ -106,6 +106,16 @@ These sensors are created but hidden in the HA UI by default. Enable them indivi
 | WiFi Hardware Status | WiFi hardware health |
 | First Print Date | Date of first print job |
 
+## Buttons
+
+| Button | Description |
+|---|---|
+| Nozzle check | Prints the printer's built-in nozzle check pattern, the same page as **Maintenance → Print Head Nozzle Check** on the control panel |
+
+The nozzle check is sent as a raw print job to TCP port 9100 (RAW/JetDirect printing must be enabled in Web Config; most models enable it by default). Load plain paper before pressing it.
+
+Printing the pattern regularly keeps the print head from drying out on printers that are rarely used. For example, an automation can press the button once a week if **Total Pages Printed** has not changed in the last seven days. Avoid automating head cleaning instead: it uses much more ink and fills the maintenance box.
+
 ## Troubleshooting
 
 ### Enable debug logging

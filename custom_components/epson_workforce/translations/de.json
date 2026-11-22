@@ -34,6 +34,11 @@
     }
   },
   "entity": {
+    "button": {
+      "nozzle_check": {
+        "name": "Düsentest"
+      }
+    },
     "sensor": {
       "ink_bk": {
         "name": "Tintenstand Schwarz"
@@ -122,6 +127,11 @@
       "wifi_hw_status": {
         "name": "WLAN-Hardwarestatus"
       }
+    }
+  },
+  "exceptions": {
+    "nozzle_check_failed": {
+      "message": "Düsentest konnte nicht an den Drucker unter {host} gesendet werden: {error}"
     }
   }
 }

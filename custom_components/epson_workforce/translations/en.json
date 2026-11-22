@@ -34,6 +34,11 @@
     }
   },
   "entity": {
+    "button": {
+      "nozzle_check": {
+        "name": "Nozzle check"
+      }
+    },
     "sensor": {
       "ink_bk": {
         "name": "Ink level Black"
@@ -122,6 +127,11 @@
       "wifi_hw_status": {
         "name": "WiFi Hardware Status"
       }
+    }
+  },
+  "exceptions": {
+    "nozzle_check_failed": {
+      "message": "Could not send the nozzle check to the printer at {host}: {error}"
     }
   }
 }

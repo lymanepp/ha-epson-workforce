@@ -9,18 +9,12 @@ from homeassistant.components.sensor import (
 )
 from homeassistant.const import PERCENTAGE
 from homeassistant.core import HomeAssistant, callback
-from homeassistant.helpers.device_registry import (
-    CONNECTION_NETWORK_MAC,
-    DeviceInfo,
-    format_mac,
-)
 from homeassistant.helpers.entity import EntityCategory
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
-from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from . import EpsonConfigEntry
-from .const import DOMAIN
 from .coordinator import EpsonCoordinator
+from .entity import EpsonEntity
 
 SENSOR_TYPES: tuple[SensorEntityDescription, ...] = (
     # --- Ink levels ---
@@ -255,10 +249,8 @@ async def async_setup_entry(
     entry.async_on_unload(coordinator.async_add_listener(_async_add_new_sensors))
 
 
-class EpsonSensor(CoordinatorEntity[EpsonCoordinator], SensorEntity):
+class EpsonSensor(EpsonEntity, SensorEntity):
     """A single Epson printer sensor."""
-
-    _attr_has_entity_name = True
 
     def __init__(
         self,
@@ -266,21 +258,9 @@ class EpsonSensor(CoordinatorEntity[EpsonCoordinator], SensorEntity):
         entry: EpsonConfigEntry,
         description: SensorEntityDescription,
     ) -> None:
-        super().__init__(coordinator)
+        super().__init__(coordinator, entry)
         self.entity_description = description
         self._attr_unique_id = f"{entry.entry_id}_{description.key}"
-        self._attr_device_info = DeviceInfo(
-            # Keyed by entry, not host, so a new printer address keeps the device.
-            identifiers={(DOMAIN, entry.entry_id)},
-            name=coordinator.data.get("_name") or f"Epson {coordinator.host}",
-            manufacturer="Epson",
-            model=coordinator.data.get("_model"),
-            connections=(
-                {(CONNECTION_NETWORK_MAC, format_mac(coordinator.data["_mac"]))}
-                if coordinator.data.get("_mac")
-                else set()
-            ),
-        )
 
     @property
     def native_value(self):
