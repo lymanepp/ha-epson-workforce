@@ -111,8 +111,13 @@ actions:
     target:
       entity_id: !input nozzle_check_button
     continue_on_error: true
-  - alias: Wait until the sensor confirms the nozzle check was sent
-    wait_template: "{{ states(last_check_sensor) != previous_check }}"
+  # Only a valid timestamp newer than the previous one counts; any other change
+  # (e.g. unavailable during an integration reload) is not a success.
+  - alias: Wait until the sensor reports a newer nozzle check
+    wait_template: >-
+      {% set new = states(last_check_sensor) | as_datetime %}
+      {% set old = previous_check | as_datetime %}
+      {{ new is not none and (old is none or new > old) }}
     timeout: "00:01:00"
     continue_on_timeout: true
   - if:
