@@ -147,7 +147,8 @@ class EpsonHTMLParser:
             if isinstance(child, Tag)
             else str(child).strip()
             for child in fieldset.children
-            if not isinstance(child, Comment) and not (isinstance(child, Tag) and child.name == "legend")
+            if not isinstance(child, Comment)
+            and not (isinstance(child, Tag) and child.name == "legend")
         )
         return " ".join(part for part in parts if part)
 
