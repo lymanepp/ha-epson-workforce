@@ -310,6 +310,7 @@ def test_status_label_is_dropped_in_any_language():
         "<html><head><title>ET-8500 Series</title></head><body>"
         '<fieldset id="PRT_STATUS" class="information-first clearfix">'
         '<legend class="key">Druckerstatus</legend>'
+        "<!-- status section -->"
         "<ul class='clearfix'><li><div class=\"preserve-white-space\">"
         "Verfügbar</div></li></ul></fieldset>"
         '<fieldset id="SCN_STATUS"><legend class="key">Scannerstatus</legend>'
