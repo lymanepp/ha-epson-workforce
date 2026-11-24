@@ -1,0 +1,127 @@
+{
+  "config": {
+    "flow_title": "{name}",
+    "step": {
+      "user": {
+        "title": "Epson WorkForce Drucker",
+        "description": "Gib die IP-Adresse deines Epson-Druckers ein.",
+        "data": {
+          "host": "IP-Adresse"
+        }
+      },
+      "reconfigure": {
+        "title": "Druckeradresse ändern",
+        "description": "Gib die neue IP-Adresse oder den Hostnamen dieses Epson-Druckers ein. Seine Sensoren und ihr Verlauf bleiben erhalten.",
+        "data": {
+          "host": "IP-Adresse"
+        }
+      },
+      "discovery_confirm": {
+        "title": "Epson-Drucker gefunden",
+        "description": "Möchtest du den {model} unter {host} hinzufügen?"
+      }
+    },
+    "error": {
+      "cannot_connect": "Verbindung fehlgeschlagen. Prüfe die IP-Adresse und ob der Drucker im Netzwerk erreichbar ist."
+    },
+    "abort": {
+      "already_configured": "Dieser Drucker ist bereits eingerichtet.",
+      "reconfigure_successful": "Die Druckeradresse wurde aktualisiert.",
+      "wrong_printer": "Unter dieser Adresse hat ein anderer Drucker geantwortet. Gib die Adresse des Druckers ein, mit dem dieser Eintrag eingerichtet wurde.",
+      "cannot_connect": "Verbindung zum Drucker fehlgeschlagen.",
+      "not_ipv4_address": "Es werden nur Drucker mit IPv4-Adresse unterstützt.",
+      "already_in_progress": "Die Einrichtung dieses Druckers läuft bereits."
+    }
+  },
+  "entity": {
+    "sensor": {
+      "ink_bk": {
+        "name": "Tintenstand Schwarz"
+      },
+      "ink_pb": {
+        "name": "Tintenstand Fotoschwarz"
+      },
+      "ink_gy": {
+        "name": "Tintenstand Grau"
+      },
+      "ink_m": {
+        "name": "Tintenstand Magenta"
+      },
+      "ink_c": {
+        "name": "Tintenstand Cyan"
+      },
+      "ink_y": {
+        "name": "Tintenstand Gelb"
+      },
+      "ink_lc": {
+        "name": "Tintenstand Hell-Cyan"
+      },
+      "ink_lm": {
+        "name": "Tintenstand Hell-Magenta"
+      },
+      "clean": {
+        "name": "Wartungsbox"
+      },
+      "printer_status": {
+        "name": "Druckerstatus"
+      },
+      "scanner_status": {
+        "name": "Scannerstatus"
+      },
+      "fax_status": {
+        "name": "Faxstatus"
+      },
+      "ip_address": {
+        "name": "IP-Adresse"
+      },
+      "signal_strength": {
+        "name": "Signalstärke"
+      },
+      "ssid": {
+        "name": "WLAN-Netzwerk"
+      },
+      "wifi_direct_connection_method": {
+        "name": "Wi-Fi Direct-Verbindung"
+      },
+      "total_pages": {
+        "name": "Gedruckte Seiten gesamt"
+      },
+      "bw_pages": {
+        "name": "Gedruckte S/W-Seiten"
+      },
+      "color_pages": {
+        "name": "Gedruckte Farbseiten"
+      },
+      "bw_copies": {
+        "name": "S/W-Kopien"
+      },
+      "color_copies": {
+        "name": "Farbkopien"
+      },
+      "bw_scans": {
+        "name": "S/W-Scans"
+      },
+      "color_scans": {
+        "name": "Farbscans"
+      },
+      "first_print_date": {
+        "name": "Erstdruckdatum"
+      },
+      "wifi_speed": {
+        "name": "WLAN-Geschwindigkeit"
+      },
+      "wifi_channel": {
+        "name": "WLAN-Kanal"
+      },
+      "wifi_mode": {
+        "name": "WLAN-Modus"
+      },
+      "wifi_security": {
+        "name": "WLAN-Sicherheit"
+      },
+      "wifi_hw_status": {
+        "name": "WLAN-Hardwarestatus"
+      }
+    }
+  }
+}
