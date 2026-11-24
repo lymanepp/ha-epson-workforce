@@ -5,8 +5,8 @@ from __future__ import annotations
 import re
 from typing import Any
 
-from bs4 import BeautifulSoup, Comment
-from bs4.element import Tag
+from bs4 import BeautifulSoup
+from bs4.element import Comment, Tag
 
 MAX_STATUS_LENGTH = 40
 
