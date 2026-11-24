@@ -2,25 +2,23 @@
 
 from __future__ import annotations
 
+from datetime import datetime
+
 from homeassistant.components.sensor import (
+    RestoreSensor,
+    SensorDeviceClass,
     SensorEntity,
     SensorEntityDescription,
     SensorStateClass,
 )
 from homeassistant.const import PERCENTAGE
 from homeassistant.core import HomeAssistant, callback
-from homeassistant.helpers.device_registry import (
-    CONNECTION_NETWORK_MAC,
-    DeviceInfo,
-    format_mac,
-)
 from homeassistant.helpers.entity import EntityCategory
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
-from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from . import EpsonConfigEntry
-from .const import DOMAIN
 from .coordinator import EpsonCoordinator
+from .entity import EpsonEntity
 
 SENSOR_TYPES: tuple[SensorEntityDescription, ...] = (
     # --- Ink levels ---
@@ -240,6 +238,11 @@ async def async_setup_entry(
     coordinator: EpsonCoordinator = entry.runtime_data
     added: set[str] = set()
 
+    # Recorded by Home Assistant, not read from the printer, so it is created
+    # and restored right away; automations can rely on it while the printer is
+    # still off.
+    async_add_entities([EpsonLastNozzleCheckSensor(coordinator, entry)])
+
     @callback
     def _async_add_new_sensors() -> None:
         data = coordinator.data or {}
@@ -255,10 +258,45 @@ async def async_setup_entry(
     entry.async_on_unload(coordinator.async_add_listener(_async_add_new_sensors))
 
 
-class EpsonSensor(CoordinatorEntity[EpsonCoordinator], SensorEntity):
-    """A single Epson printer sensor."""
+LAST_NOZZLE_CHECK = SensorEntityDescription(  # type: ignore[call-arg]
+    key="last_nozzle_check",
+    translation_key="last_nozzle_check",
+    icon="mdi:printer-eye",
+    device_class=SensorDeviceClass.TIMESTAMP,
+)
 
-    _attr_has_entity_name = True
+
+class EpsonLastNozzleCheckSensor(EpsonEntity, RestoreSensor):
+    """When Home Assistant last sent a nozzle check to the printer."""
+
+    entity_description = LAST_NOZZLE_CHECK
+
+    def __init__(self, coordinator: EpsonCoordinator, entry: EpsonConfigEntry) -> None:
+        super().__init__(coordinator, entry)
+        self._attr_unique_id = f"{entry.entry_id}_{LAST_NOZZLE_CHECK.key}"
+
+    async def async_added_to_hass(self) -> None:
+        """Restore the timestamp from before the last restart."""
+        await super().async_added_to_hass()
+        if self.coordinator.last_nozzle_check is not None:
+            return
+        last = await self.async_get_last_sensor_data()
+        if last is not None and isinstance(last.native_value, datetime):
+            self.coordinator.last_nozzle_check = last.native_value
+
+    @property
+    def available(self) -> bool:
+        """Stay available while the printer is offline; the value is ours."""
+        return True
+
+    @property
+    def native_value(self) -> datetime | None:
+        """Return when the last nozzle check was sent."""
+        return self.coordinator.last_nozzle_check
+
+
+class EpsonSensor(EpsonEntity, SensorEntity):
+    """A single Epson printer sensor."""
 
     def __init__(
         self,
@@ -266,21 +304,9 @@ class EpsonSensor(CoordinatorEntity[EpsonCoordinator], SensorEntity):
         entry: EpsonConfigEntry,
         description: SensorEntityDescription,
     ) -> None:
-        super().__init__(coordinator)
+        super().__init__(coordinator, entry)
         self.entity_description = description
         self._attr_unique_id = f"{entry.entry_id}_{description.key}"
-        self._attr_device_info = DeviceInfo(
-            # Keyed by entry, not host, so a new printer address keeps the device.
-            identifiers={(DOMAIN, entry.entry_id)},
-            name=coordinator.data.get("_name") or f"Epson {coordinator.host}",
-            manufacturer="Epson",
-            model=coordinator.data.get("_model"),
-            connections=(
-                {(CONNECTION_NETWORK_MAC, format_mac(coordinator.data["_mac"]))}
-                if coordinator.data.get("_mac")
-                else set()
-            ),
-        )
 
     @property
     def native_value(self):

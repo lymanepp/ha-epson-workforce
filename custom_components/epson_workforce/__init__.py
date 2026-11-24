@@ -14,7 +14,7 @@ from .coordinator import EpsonCoordinator
 
 _LOGGER = logging.getLogger(__name__)
 
-PLATFORMS = [Platform.SENSOR]
+PLATFORMS = [Platform.BUTTON, Platform.SENSOR]
 
 type EpsonConfigEntry = ConfigEntry[EpsonCoordinator]
 

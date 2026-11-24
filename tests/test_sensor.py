@@ -44,7 +44,7 @@ async def test_initial_sensors_created_for_present_keys():
 
     await async_setup_entry(MagicMock(), entry, add_entities)
 
-    assert sorted(_keys(added)) == ["ink_bk", "printer_status"]
+    assert sorted(_keys(added)) == ["ink_bk", "last_nozzle_check", "printer_status"]
 
 
 @pytest.mark.asyncio
@@ -53,12 +53,17 @@ async def test_sensors_missing_at_startup_are_added_later():
     coordinator, entry, add_entities, added, _ = _setup({"ink_bk": 50})
 
     await async_setup_entry(MagicMock(), entry, add_entities)
-    assert _keys(added) == ["ink_bk"]
+    assert sorted(_keys(added)) == ["ink_bk", "last_nozzle_check"]
 
     coordinator.data = {"ink_bk": 49, "total_pages": 1234, "bw_pages": 1000}
     _listener(coordinator)()
 
-    assert sorted(_keys(added)) == ["bw_pages", "ink_bk", "total_pages"]
+    assert sorted(_keys(added)) == [
+        "bw_pages",
+        "ink_bk",
+        "last_nozzle_check",
+        "total_pages",
+    ]
 
 
 @pytest.mark.asyncio
@@ -76,8 +81,9 @@ async def test_sensors_are_not_added_twice():
     coordinator.data = {"ink_bk": 50, "total_pages": 2}
     listener()
 
-    assert sorted(_keys(added)) == ["ink_bk", "total_pages"]
-    assert add_entities.call_count == 1
+    assert sorted(_keys(added)) == ["ink_bk", "last_nozzle_check", "total_pages"]
+    # Once for the last-nozzle-check sensor, once for the printer's values.
+    assert add_entities.call_count == 2
 
 
 @pytest.mark.asyncio
@@ -90,10 +96,12 @@ async def test_listener_removed_on_unload():
 
 
 @pytest.mark.asyncio
-async def test_no_data_does_not_add_entities():
-    coordinator, entry, add_entities, _, _ = _setup(None)  # type: ignore[arg-type]
+async def test_no_data_adds_only_last_nozzle_check():
+    """The printer is off at startup: only the sensor Home Assistant records."""
+    coordinator, entry, add_entities, added, _ = _setup(None)  # type: ignore[arg-type]
 
     await async_setup_entry(MagicMock(), entry, add_entities)
     _listener(coordinator)()
 
-    add_entities.assert_not_called()
+    assert _keys(added) == ["last_nozzle_check"]
+    assert add_entities.call_count == 1
