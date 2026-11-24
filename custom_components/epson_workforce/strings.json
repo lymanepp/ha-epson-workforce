@@ -32,5 +32,96 @@
       "not_ipv4_address": "Only printers with an IPv4 address are supported.",
       "already_in_progress": "Setup for this printer is already in progress."
     }
+  },
+  "entity": {
+    "sensor": {
+      "ink_bk": {
+        "name": "Ink level Black"
+      },
+      "ink_pb": {
+        "name": "Ink level Photoblack"
+      },
+      "ink_gy": {
+        "name": "Ink level Gray"
+      },
+      "ink_m": {
+        "name": "Ink level Magenta"
+      },
+      "ink_c": {
+        "name": "Ink level Cyan"
+      },
+      "ink_y": {
+        "name": "Ink level Yellow"
+      },
+      "ink_lc": {
+        "name": "Ink level Light Cyan"
+      },
+      "ink_lm": {
+        "name": "Ink level Light Magenta"
+      },
+      "clean": {
+        "name": "Cleaning level"
+      },
+      "printer_status": {
+        "name": "Printer Status"
+      },
+      "scanner_status": {
+        "name": "Scanner Status"
+      },
+      "fax_status": {
+        "name": "Fax Status"
+      },
+      "ip_address": {
+        "name": "IP Address"
+      },
+      "signal_strength": {
+        "name": "Signal Strength"
+      },
+      "ssid": {
+        "name": "WiFi Network"
+      },
+      "wifi_direct_connection_method": {
+        "name": "WiFi Direct Connection"
+      },
+      "total_pages": {
+        "name": "Total Pages Printed"
+      },
+      "bw_pages": {
+        "name": "B&W Pages Printed"
+      },
+      "color_pages": {
+        "name": "Color Pages Printed"
+      },
+      "bw_copies": {
+        "name": "B&W Copies"
+      },
+      "color_copies": {
+        "name": "Color Copies"
+      },
+      "bw_scans": {
+        "name": "B&W Scans"
+      },
+      "color_scans": {
+        "name": "Color Scans"
+      },
+      "first_print_date": {
+        "name": "First Print Date"
+      },
+      "wifi_speed": {
+        "name": "WiFi Speed"
+      },
+      "wifi_channel": {
+        "name": "WiFi Channel"
+      },
+      "wifi_mode": {
+        "name": "WiFi Mode"
+      },
+      "wifi_security": {
+        "name": "WiFi Security"
+      },
+      "wifi_hw_status": {
+        "name": "WiFi Hardware Status"
+      }
+    }
   }
 }
