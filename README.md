@@ -111,7 +111,10 @@ These sensors are created but hidden in the HA UI by default. Enable them indivi
 
 | Button | Description |
 |---|---|
-| Nozzle check | Prints the printer's built-in nozzle check pattern, the same page as **Maintenance → Print Head Nozzle Check** on the control panel |
+| Nozzle check *(experimental)* | Prints the printer's built-in nozzle check pattern, the same page as **Maintenance → Print Head Nozzle Check** on the control panel |
+
+> [!NOTE]
+> The nozzle check button is experimental. Tested models: **ET-8500**. It uses a generic Epson remote command, so other inkjet models should work too, but a model that ejects the nozzle check page on its own might feed an extra blank sheet. Please open an issue to report whether it works with your model.
 
 The nozzle check is sent as a raw print job to TCP port 9100 (RAW/JetDirect printing must be enabled in Web Config; most models enable it by default). Load plain paper before pressing it.
 
