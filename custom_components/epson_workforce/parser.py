@@ -6,7 +6,7 @@ import re
 from typing import Any
 
 from bs4 import BeautifulSoup
-from bs4.element import Tag
+from bs4.element import Comment, Tag
 
 MAX_STATUS_LENGTH = 40
 
@@ -115,14 +115,12 @@ class EpsonHTMLParser:
         # Printer status (modern pages)
         fs_prt = self.soup.find("fieldset", id="PRT_STATUS")
         if isinstance(fs_prt, Tag):
-            txt = fs_prt.get_text(" ", strip=True)
-            out["printer_status"] = self._clean_status(txt)
+            out["printer_status"] = self._clean_status(self._fieldset_text(fs_prt))
 
         # Scanner status (when present)
         fs_scn = self.soup.find("fieldset", id="SCN_STATUS")
         if isinstance(fs_scn, Tag):
-            txt = fs_scn.get_text(" ", strip=True)
-            out["scanner_status"] = self._clean_status(txt)
+            out["scanner_status"] = self._clean_status(self._fieldset_text(fs_scn))
 
         # Fallback for older layout (e.g., WF-3540): .information span -> "Available."
         if not out.get("printer_status"):
@@ -135,6 +133,24 @@ class EpsonHTMLParser:
                     )
 
         return out
+
+    @staticmethod
+    def _fieldset_text(fieldset: Tag) -> str:
+        """Return a status fieldset's text without its <legend> label.
+
+        The legend holds the label in the printer's language ("Printer Status",
+        "Druckerstatus", "Status drukarki", ...), so it is skipped by element
+        rather than stripped by an English pattern.
+        """
+        parts = (
+            child.get_text(" ", strip=True)
+            if isinstance(child, Tag)
+            else str(child).strip()
+            for child in fieldset.children
+            if not isinstance(child, Comment)
+            and not (isinstance(child, Tag) and child.name == "legend")
+        )
+        return " ".join(part for part in parts if part)
 
     @staticmethod
     def _clean_status(s: str | None) -> str | None:
