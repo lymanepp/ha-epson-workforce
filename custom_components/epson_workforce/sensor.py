@@ -238,23 +238,21 @@ async def async_setup_entry(
     coordinator: EpsonCoordinator = entry.runtime_data
     added: set[str] = set()
 
+    # Recorded by Home Assistant, not read from the printer, so it is created
+    # and restored right away; automations can rely on it while the printer is
+    # still off.
+    async_add_entities([EpsonLastNozzleCheckSensor(coordinator, entry)])
+
     @callback
     def _async_add_new_sensors() -> None:
-        data = coordinator.data
-        if data is None:
-            return
+        data = coordinator.data or {}
         new = [
             desc for desc in SENSOR_TYPES if desc.key in data and desc.key not in added
         ]
-        entities: list[SensorEntity] = [
-            EpsonSensor(coordinator, entry, desc) for desc in new
-        ]
+        if not new:
+            return
         added.update(desc.key for desc in new)
-        if LAST_NOZZLE_CHECK.key not in added:
-            added.add(LAST_NOZZLE_CHECK.key)
-            entities.append(EpsonLastNozzleCheckSensor(coordinator, entry))
-        if entities:
-            async_add_entities(entities)
+        async_add_entities(EpsonSensor(coordinator, entry, desc) for desc in new)
 
     _async_add_new_sensors()
     entry.async_on_unload(coordinator.async_add_listener(_async_add_new_sensors))

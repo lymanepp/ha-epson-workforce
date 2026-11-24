@@ -21,15 +21,22 @@ class EpsonEntity(CoordinatorEntity[EpsonCoordinator]):
 
     def __init__(self, coordinator: EpsonCoordinator, entry: ConfigEntry) -> None:
         super().__init__(coordinator)
+        # Keyed by entry, not host, so a new printer address keeps the device.
+        identifiers = {(DOMAIN, entry.entry_id)}
+        data = coordinator.data
+        if data is None:
+            # Printer not reached yet: link to the device without overwriting
+            # the name and model it got when the printer last answered.
+            self._attr_device_info = DeviceInfo(identifiers=identifiers)
+            return
         self._attr_device_info = DeviceInfo(
-            # Keyed by entry, not host, so a new printer address keeps the device.
-            identifiers={(DOMAIN, entry.entry_id)},
-            name=coordinator.data.get("_name") or f"Epson {coordinator.host}",
+            identifiers=identifiers,
+            name=data.get("_name") or f"Epson {coordinator.host}",
             manufacturer="Epson",
-            model=coordinator.data.get("_model"),
+            model=data.get("_model"),
             connections=(
-                {(CONNECTION_NETWORK_MAC, format_mac(coordinator.data["_mac"]))}
-                if coordinator.data.get("_mac")
+                {(CONNECTION_NETWORK_MAC, format_mac(data["_mac"]))}
+                if data.get("_mac")
                 else set()
             ),
         )

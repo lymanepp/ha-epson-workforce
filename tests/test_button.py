@@ -158,6 +158,63 @@ async def test_last_nozzle_check_restored(hass):
     assert hass.states.get(sensor_id).state == last.isoformat()
 
 
+async def test_last_nozzle_check_restored_when_starting_offline(hass):
+    """Home Assistant starts while the printer is off, after an earlier run."""
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        unique_id="aa:bb:cc:dd:ee:01",
+        title="Epson",
+        data={CONF_HOST: HOST},
+    )
+    entry.add_to_hass(hass)
+    device = dr.async_get(hass).async_get_or_create(
+        config_entry_id=entry.entry_id,
+        identifiers={(DOMAIN, entry.entry_id)},
+        name="EPSON123456",
+        manufacturer="Epson",
+        model="EPSON ET-8500 Series",
+    )
+    sensor_id = (
+        er.async_get(hass)
+        .async_get_or_create(
+            "sensor",
+            DOMAIN,
+            f"{entry.entry_id}_last_nozzle_check",
+            suggested_object_id="epson123456_last_nozzle_check",
+            config_entry=entry,
+            device_id=device.id,
+        )
+        .entity_id
+    )
+    last = datetime(2026, 11, 20, 10, 0, tzinfo=UTC)
+    mock_restore_cache_with_extra_data(
+        hass,
+        [
+            (
+                State(sensor_id, last.isoformat()),
+                {
+                    "native_value": {
+                        "__type": "<class 'datetime.datetime'>",
+                        "isoformat": last.isoformat(),
+                    },
+                    "native_unit_of_measurement": None,
+                },
+            )
+        ],
+    )
+
+    with patch(_UPDATE, side_effect=UpdateFailed("offline")):
+        assert await hass.config_entries.async_setup(entry.entry_id)
+        await hass.async_block_till_done()
+
+    assert entry.runtime_data.data is None
+    assert hass.states.get(sensor_id).state == last.isoformat()
+    assert _button_entity_id(hass, entry) is None
+    device = dr.async_get(hass).async_get(device.id)
+    assert device.name == "EPSON123456"
+    assert device.model == "EPSON ET-8500 Series"
+
+
 async def test_last_nozzle_check_available_while_printer_offline(hass, freezer):
     freezer.move_to("2026-11-22 10:00:00+00:00")
     entry = await _setup(hass)
